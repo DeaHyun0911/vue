@@ -1,0 +1,11 @@
+{
+  "src/pages/Grid001n/main.js": {
+    "file": "grid001n.js",
+    "name": "grid001n",
+    "src": "src/pages/Grid001n/main.js",
+    "isEntry": true,
+    "css": [
+      "grid001n.css"
+    ]
+  }
+}

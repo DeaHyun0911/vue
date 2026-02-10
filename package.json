@@ -1,0 +1,22 @@
+{
+  "name": "cwws-com-ui",
+  "version": "1.0.0",
+  "private": true,
+  "description": "CWWS ctv-ui bundle (includes es-hangul)",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "build:ui": "node build-ui.js"
+  },
+  "dependencies": {
+    "@element-plus/icons-vue": "^2.3.2",
+    "element-plus": "^2.13.2",
+    "es-hangul": "^2.3.8",
+    "vue": "^3.5.28"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^6.0.4",
+    "esbuild": "^0.24.2",
+    "vite": "^7.3.1"
+  }
+}

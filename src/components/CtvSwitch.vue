@@ -1,0 +1,64 @@
+<template>
+  <div class="ctv-switch-wrapper" :style="wrapperStyle">
+    <label 
+      v-if="title" 
+      class="ctv-label" 
+      :class="labelClasses"
+      :style="{ width: labelWidth + 'px' }"
+    >
+      {{ title }}
+    </label>
+    <el-switch
+      v-model="innerValue"
+      :active-text="activeText"
+      :inactive-text="inactiveText"
+      :disabled="disabled"
+      @change="$emit('change', $event)"
+      v-bind="$attrs"
+    />
+  </div>
+</template>
+
+<script setup>
+import { computed } from 'vue';
+
+const props = defineProps({
+  modelValue: [Boolean, String, Number],
+  title: String,
+  labelAlign: { type: String, default: 'left' },
+  labelWidth: { type: [String, Number], default: 100 },
+  activeText: String,
+  inactiveText: String,
+  disabled: Boolean,
+});
+
+const emit = defineEmits(['update:modelValue', 'change']);
+
+const innerValue = computed({
+  get: () => !!props.modelValue,
+  set: (val) => emit('update:modelValue', val)
+});
+
+const wrapperStyle = computed(() => ({
+    display: 'flex',
+    alignItems: 'center',
+    marginBottom: '5px'
+}));
+
+const labelClasses = computed(() => ({
+    [`align-${props.labelAlign}`]: true
+}));
+</script>
+
+<style scoped>
+.ctv-switch-wrapper { width: 100%; }
+.ctv-label {
+    margin-right: 10px;
+    font-size: 13px;
+    color: #606266;
+    flex-shrink: 0;
+}
+.ctv-label.align-left { text-align: left; }
+.ctv-label.align-center { text-align: center; }
+.ctv-label.align-right { text-align: right; }
+</style>
