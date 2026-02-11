@@ -5,3 +5,6 @@ export { default as CtvDate } from './CtvDate.vue';
 export { default as CtvCheck } from './CtvCheck.vue';
 export { default as CtvDataGrid } from './CtvDataGrid.vue';
 export { default as CtvQueryFilter } from './CtvQueryFilter.vue';
+export { default as CtvToolBox } from './CtvToolBox.vue';
+export { default as CtvModal } from './CtvModal.vue';
+export { default as CtvConfirm } from './CtvConfirm.vue';

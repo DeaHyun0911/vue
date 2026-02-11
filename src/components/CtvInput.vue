@@ -98,38 +98,6 @@ defineExpose({ validate });
 </script>
 
 <style scoped>
-.ctv-wrapper {
-    width: 100%;
-}
-.ctv-label {
-    margin-right: 10px;
-    font-size: 13px;
-    color: #606266;
-    flex-shrink: 0;
-    line-height: 32px; /* align with input height */
-}
-.ctv-label.align-left { text-align: left; }
-.ctv-label.align-center { text-align: center; }
-.ctv-label.align-right { text-align: right; }
-.ctv-label.is-required::before {
-    content: '*';
-    color: #f56c6c;
-    margin-right: 4px;
-}
-.ctv-body {
-    flex: 1;
-    position: relative;
-    display: flex;
-    flex-direction: column;
-}
-.ctv-error-msg {
-    color: #f56c6c;
-    font-size: 12px;
-    margin-top: 2px;
-    position: absolute;
-    top: 100%;
-    left: 0;
-}
 :deep(.el-input__wrapper) {
     box-shadow: 0 0 0 1px #dcdfe6 inset;
 }

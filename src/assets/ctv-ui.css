@@ -2,27 +2,13 @@
 :root {
     --el-color-primary: #409eff;
     --el-text-color-primary: #303133;
+    --el-font-size-base: 13px;
+    --el-mask-color: transparent;
 }
 
 /* Custom Check Wrapper */
 .ctv-check-wrapper .el-checkbox__label {
     font-weight: normal;
-}
-
-/* Ensure consistent sizing */
-.el-input__wrapper,
-.el-select__wrapper {
-    box-shadow: 0 0 0 1px #dcdfe6 inset !important;
-}
-
-.el-input__wrapper:hover,
-.el-select__wrapper:hover {
-    box-shadow: 0 0 0 1px #c0c4cc inset !important;
-}
-
-.el-input__wrapper.is-focus,
-.el-select__wrapper.is-focus {
-    box-shadow: 0 0 0 1px #409eff inset !important;
 }
 
 .el-popper__arrow,
@@ -32,4 +18,84 @@
 
 .el-popper {
     margin-top: -10px !important;
+}
+
+/* Common Form Component Styles (Unifying Labels and Wrappers) */
+.ctv-wrapper,
+.ctv-date-wrapper,
+.ctv-check-wrapper,
+.ctv-switch-wrapper {
+    width: 100%;
+    display: flex;
+    align-items: center;
+}
+
+/* Ensure wrapper handles flex layout correctly if needed */
+
+.ctv-label {
+    margin-right: 10px;
+    font-size: 13px;
+    color: #606266;
+    flex-shrink: 0;
+    line-height: 32px;
+    /* align with input height */
+    font-weight: 500;
+    color: #262626;
+    width: 100px;
+    /* Default width, overridden by inline style */
+    box-sizing: border-box;
+}
+
+.ctv-label.align-left {
+    text-align: left;
+}
+
+.ctv-label.align-center {
+    text-align: center;
+}
+
+.ctv-label.align-right {
+    text-align: right;
+}
+
+.ctv-label.is-required::before {
+    content: '*';
+    color: #f56c6c;
+    margin-right: 4px;
+}
+
+.ctv-body {
+    flex: 1;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+}
+
+.ctv-error-msg {
+    color: #f56c6c;
+    font-size: 12px;
+    margin-top: 2px;
+    position: absolute;
+    top: 100%;
+    left: 0;
+}
+
+.el-select__wrapper {
+    font-size: 13px;
+}
+
+.el-message-box__btns {
+    gap: 8px;
+}
+
+.el-message-box {
+    --el-messagebox-padding-primary: 20px;
+}
+
+.el-message-box__title {
+    font-weight: 600;
+}
+
+.el-button+.el-button {
+    margin-left: 0px;
 }

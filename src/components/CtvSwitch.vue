@@ -51,14 +51,4 @@ const labelClasses = computed(() => ({
 </script>
 
 <style scoped>
-.ctv-switch-wrapper { width: 100%; }
-.ctv-label {
-    margin-right: 10px;
-    font-size: 13px;
-    color: #606266;
-    flex-shrink: 0;
-}
-.ctv-label.align-left { text-align: left; }
-.ctv-label.align-center { text-align: center; }
-.ctv-label.align-right { text-align: right; }
 </style>

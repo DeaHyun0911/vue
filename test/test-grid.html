@@ -53,7 +53,10 @@
             <ctv-query-filter id="filter1" :columns="4" :fields="filterFields" target="grid1">
             </ctv-query-filter>
 
-            <ctv-data-grid id="grid1" :grid-config="gridConfig" :query="queryConfig" :editable="true">
+            <ctv-tool-box target="grid1" :left="toolBoxConfig.left" :right="toolBoxConfig.right"></ctv-tool-box>
+
+            <ctv-data-grid id="grid1" title="프로그램등록" :grid-config="gridConfig" :query="query" :save="save"
+                :editable="true">
             </ctv-data-grid>
         </div>
     </div>

@@ -4,7 +4,7 @@
       <!-- 필터 필드 영역 -->
       <div class="filter-grid" :style="gridStyle">
         <div 
-          v-for="(field, index) in fields" 
+          v-for="(field, index) in normalizedFields" 
           :key="index"
           :style="getFieldStyle(field)"
           class="filter-field"
@@ -20,10 +20,10 @@
       
       <!-- 버튼 영역 -->
       <div v-if="showButtons" class="button-group">
-        <ctv-button type="primary" @click="handleQuery">
+        <ctv-button type="primary" icon="Search" @click="handleQuery">
           {{ buttonLabels.query }}
         </ctv-button>
-        <ctv-button @click="handleReset">
+        <ctv-button icon="Refresh" @click="handleReset">
           {{ buttonLabels.reset }}
         </ctv-button>
         
@@ -95,6 +95,26 @@ const props = defineProps({
 });
 
 const emit = defineEmits(['update:field', 'query', 'reset']);
+
+/**
+ * 정규화된 필드 목록 (기본값 적용)
+ */
+const normalizedFields = computed(() => {
+  return props.fields.map(field => {
+    // 깊은 복사 또는 props 병합
+    const defaultProps = {
+      labelAlign: 'right' // 기본값: 오른쪽 정렬
+    };
+    
+    return {
+      ...field,
+      props: {
+        ...defaultProps,
+        ...(field.props || {})
+      }
+    };
+  });
+});
 
 /**
  * 내부 필드 값 관리 (자체 상태 관리)

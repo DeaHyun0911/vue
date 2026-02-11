@@ -212,7 +212,7 @@
         });
 
         // 조회 설정 (filterRef로 필터 참조)
-        const queryConfig = {
+        const query = {
             path: "Bpa100n.ashx",
             funcNm: "UfnQuery",
             filterRef: 'filter1',  // 필터 ID 참조
@@ -224,6 +224,12 @@
                 filterValues.MC_PGM_TYPE || '',
             ],
             dataPath: 'rsData01'
+        };
+
+        const save = {
+            path: "Bpa100n.ashx",
+            funcNm: 'UfnSave',
+            bParam: [top.gSInfo[window.ERPSDB], '', '']
         };
 
         // 초기화
@@ -241,12 +247,19 @@
             comboLoaded.value = true;
         });
 
+        const toolBoxConfig = {
+            left: ['append', 'delete'],
+            right: ['save', 'excel']
+        };
+
         return {
             comboLoaded,
             options,
             filterFields,
             gridConfig,
-            queryConfig
+            query,
+            save,
+            toolBoxConfig
         };
     };
 
