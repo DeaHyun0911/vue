@@ -39,8 +39,8 @@ const props = defineProps({
   }
 });
 
-import { provide } from 'vue';
-provide('ctvFormModel', props.model);
+import { provide, toRef } from 'vue';
+provide('formModel', toRef(props, 'model'));
 
 const formRef = ref(null);
 

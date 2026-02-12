@@ -806,17 +806,15 @@ const setupSyncForm = () => {
         if (isSyncingFromGrid) return;
         if (!datagrid.grid) return;
 
-        const rowItem = SBGrid3.getFocusedRow(datagrid.grid);
-        if (!rowItem) return;
+        const focusRowKey = SBGrid3.getFocusedKey(datagrid.grid);
+        if (!focusRowKey) return;
 
         const columns = syncForm.columns;
         const keys = columns === 'all' ? Object.keys(newVal) : (Array.isArray(columns) ? columns : []);
 
         keys.forEach(key => {
-            const currentVal = SBGrid3.getValue(datagrid.grid, rowItem, key);
-            if (currentVal !== newVal[key]) {
-                SBGrid3.setValue(datagrid.grid, rowItem, key, newVal[key]);
-            }
+                SBGrid3.setValue(datagrid.grid, focusRowKey, newVal[key], key);
+                console.log('syncForm', newVal[key], key);
         });
     }, { deep: true });
 };
@@ -865,16 +863,14 @@ const setupFocusDataSync = () => {
         if (isSyncingFromGridToFocusData) return;
         if (!datagrid.grid) return;
 
-        const rowItem = SBGrid3.getFocusedRow(datagrid.grid);
-        if (!rowItem) return;
+        const focusRowKey = SBGrid3.getFocusedKey(datagrid.grid);
+        if (!focusRowKey) return;
 
         // 변경된 값만 그리드에 반영
         Object.keys(newVal).forEach(key => {
-            // 해당 키가 컬럼에 존재하는지 확인 (선택적)
-            // 여기서는 무조건 시도
-            const gridVal = SBGrid3.getValue(datagrid.grid, rowItem, key);
+            const gridVal = SBGrid3.getValue(datagrid.grid, focusRowKey, key);
             if (gridVal !== newVal[key]) {
-                SBGrid3.setValue(datagrid.grid, rowItem, key, newVal[key]);
+                SBGrid3.setValue(datagrid.grid, focusRowKey, newVal[key], key);
             }
         });
     }, { deep: true });

@@ -1,129 +1,8 @@
 (function () {
     const { ref, reactive, onMounted, computed } = window.Vue;
 
-    // ===== Mock 설정 =====
-    const originalCtv = window.Ctv || {};
-
-    window.Ctv = {
-        ...originalCtv,
-        setCombo: async function (options, config) {
-            const mockComboData = {
-                MC_MENU: [
-                    { value: 'M001', label: '시스템관리' },
-                    { value: 'M002', label: '인사관리' },
-                    { value: 'M003', label: '급여관리' },
-                    { value: 'M004', label: '회계관리' }
-                ],
-                MC_AMD_TYPE: [
-                    { value: 'A01', label: '관리자' },
-                    { value: 'A02', label: '사용자' },
-                    { value: 'A03', label: '조회' }
-                ],
-                MC_PGM_TYPE: [
-                    { value: 'T01', label: '입력' },
-                    { value: 'T02', label: '조회' },
-                    { value: 'T03', label: '리포트' }
-                ],
-                PGM_FOLDER: [
-                    { value: 'F01', label: '/cBase' },
-                    { value: 'F02', label: '/cPayTax' },
-                    { value: 'F03', label: '/cHR' }
-                ],
-                YN_USE: [
-                    { value: 'Y', label: '사용' },
-                    { value: 'N', label: '미사용' }
-                ],
-                MC_MODL_TYPE: [
-                    { value: 'MD01', label: '기본모듈' },
-                    { value: 'MD02', label: '급여모듈' },
-                    { value: 'MD03', label: '인사모듈' }
-                ]
-            };
-
-            for (const key in config) {
-                if (mockComboData[key]) {
-                    options[key] = mockComboData[key];
-                }
-            }
-
-            return new Promise(resolve => setTimeout(resolve, 500));
-        },
-    };
-
-    window.Ctv.dataQuery = async function (config) {
-        const mockGridData = [
-            {
-                MC_MENU: 'M001', ID_PGM_TOP: '', NO_PGM: 0,
-                ID_PGM: 'BPA100N', NM_KOR_PGM: '프로그램등록',
-                NM_ENG_PGM: 'Program Registration', NM_CHN_PGM: '程序注册',
-                MC_AMD_TYPE: 'A01', MC_PGM_TYPE: 'T01', PGM_FOLDER: 'F01',
-                YN_USE: 'Y', MC_MODL_TYPE: 'MD01',
-                DT_PATCH_FIR: '2024-01-01', DT_PATCH_LST: '2024-12-31',
-                BIGO: '기본 프로그램 관리 화면',
-                TM_REG: '2024-01-01 09:00:00', TM_UPT: '2024-12-31 18:00:00',
-                ROWID: 'R001'
-            },
-            {
-                MC_MENU: 'M001', ID_PGM_TOP: '', NO_PGM: 1,
-                ID_PGM: 'BPA200N', NM_KOR_PGM: '사용자관리',
-                NM_ENG_PGM: 'User Management', NM_CHN_PGM: '用户管理',
-                MC_AMD_TYPE: 'A01', MC_PGM_TYPE: 'T01', PGM_FOLDER: 'F01',
-                YN_USE: 'Y', MC_MODL_TYPE: 'MD01',
-                DT_PATCH_FIR: '2024-02-01', DT_PATCH_LST: '2024-11-30',
-                BIGO: '사용자 등록 및 권한 관리',
-                TM_REG: '2024-02-01 09:00:00', TM_UPT: '2024-11-30 18:00:00',
-                ROWID: 'R002'
-            },
-            {
-                MC_MENU: 'M002', ID_PGM_TOP: '', NO_PGM: 2,
-                ID_PGM: 'HRM100N', NM_KOR_PGM: '인사기본등록',
-                NM_ENG_PGM: 'HR Basic Registration', NM_CHN_PGM: '人事基本登记',
-                MC_AMD_TYPE: 'A02', MC_PGM_TYPE: 'T01', PGM_FOLDER: 'F03',
-                YN_USE: 'Y', MC_MODL_TYPE: 'MD03',
-                DT_PATCH_FIR: '2024-03-01', DT_PATCH_LST: '2024-10-15',
-                BIGO: '인사 기본정보 입력',
-                TM_REG: '2024-03-01 09:00:00', TM_UPT: '2024-10-15 18:00:00',
-                ROWID: 'R003'
-            },
-            {
-                MC_MENU: 'M003', ID_PGM_TOP: '', NO_PGM: 3,
-                ID_PGM: 'PAY100N', NM_KOR_PGM: '급여계산',
-                NM_ENG_PGM: 'Payroll Calculation', NM_CHN_PGM: '工资计算',
-                MC_AMD_TYPE: 'A02', MC_PGM_TYPE: 'T02', PGM_FOLDER: 'F02',
-                YN_USE: 'N', MC_MODL_TYPE: 'MD02',
-                DT_PATCH_FIR: '2024-04-01', DT_PATCH_LST: '2024-09-30',
-                BIGO: '월 급여 계산 및 조회 화면',
-                TM_REG: '2024-04-01 09:00:00', TM_UPT: '2024-09-30 18:00:00',
-                ROWID: 'R004'
-            },
-            {
-                MC_MENU: 'M004', ID_PGM_TOP: '', NO_PGM: 4,
-                ID_PGM: 'ACC100N', NM_KOR_PGM: '전표입력',
-                NM_ENG_PGM: 'Voucher Entry', NM_CHN_PGM: '凭证录入',
-                MC_AMD_TYPE: 'A03', MC_PGM_TYPE: 'T01', PGM_FOLDER: 'F01',
-                YN_USE: 'Y', MC_MODL_TYPE: 'MD01',
-                DT_PATCH_FIR: '2024-05-01', DT_PATCH_LST: '2024-12-01',
-                BIGO: '',
-                TM_REG: '2024-05-01 09:00:00', TM_UPT: '2024-12-01 18:00:00',
-                ROWID: 'R005'
-            }
-        ];
-
-        return new Promise(resolve => {
-            setTimeout(() => {
-                resolve({ rsData01: mockGridData });
-            }, 300);
-        });
-    };
-
-    // Global mock setup
-    window.top = window.top || {};
-    window.top.gSInfo = window.top.gSInfo || {};
-    window.top.gSInfo.ERPSDB = 'TEST_DB';
-    window.ERPSDB = 'ERPSDB';
-    window.top.mwHourglassHide = function () {
-        console.log('Loading complete');
-    };
+    // ===== Mock 설정 (mock-data.js 사용) =====
+    // window.Ctv 및 Global setup은 mock-data.js에서 처리됨
 
     // ===== 페이지 설정 =====
     window.onPageSetup = function () {
@@ -210,7 +89,7 @@
             gridConfig: gridConfig,
             query: {
                 path: 'Bpa100n.ashx',
-                funcNm: 'UfnQuery',
+                funcNm: 'UfnQueryProgram',
                 filterRef: 'filter1',
                 params: (filterValues) => [
                     window.top.gSInfo[window.ERPSDB],

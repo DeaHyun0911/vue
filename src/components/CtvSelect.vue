@@ -28,6 +28,7 @@
         @focus="$emit('focus', $event)"
         @blur="onBlur"
         @change="$emit('change', $event)"
+        style="width: 100%; box-sizing: border-box;"
         v-bind="$attrs"
       >
         <template v-if="$slots.prepend" #prepend>
@@ -65,18 +66,15 @@ const props = defineProps({
   multiple: Boolean,
   labelAlign: { type: String, default: 'left' },
   labelWidth: { type: [String, Number], default: 100 },
-  required: Boolean
+  required: Boolean,
+  field: String // New prop for implicit binding
 });
+
+import { useFormField } from '../composables/useFormField';
 
 const emit = defineEmits(['update:modelValue', 'change', 'blur', 'focus']);
 
-const innerValue = computed({
-  get: () => props.modelValue,
-  set: (val) => {
-    const newValue = (val === null || val === undefined) ? "" : val;
-    emit('update:modelValue', newValue);
-  }
-});
+const { innerValue } = useFormField(props, emit);
 
 const errorMessage = ref('');
 const hasError = computed(() => !!errorMessage.value);

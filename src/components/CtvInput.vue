@@ -27,6 +27,7 @@
         @blur="onBlur"
         @change="$emit('change', $event)"
         @input="$emit('input', $event)"
+        style="width: 100%; box-sizing: border-box;"
         v-bind="$attrs"
       >
         <template v-if="$slots.prepend" #prepend>
@@ -60,25 +61,11 @@ const props = defineProps({
   field: String // New prop for implicit binding
 });
 
-import { inject } from 'vue';
-const formModel = inject('ctvFormModel', null);
+import { useFormField } from '../composables/useFormField';
 
 const emit = defineEmits(['update:modelValue', 'change', 'input', 'blur', 'focus']);
 
-const innerValue = computed({
-  get: () => {
-      if (props.field && formModel && formModel[props.field] !== undefined) {
-          return formModel[props.field];
-      }
-      return props.modelValue;
-  },
-  set: (val) => {
-      if (props.field && formModel) {
-          formModel[props.field] = val;
-      }
-      emit('update:modelValue', val);
-  }
-});
+const { innerValue } = useFormField(props, emit);
 
 const errorMessage = ref('');
 const hasError = computed(() => !!errorMessage.value);

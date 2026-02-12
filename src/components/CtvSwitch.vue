@@ -12,6 +12,8 @@
       v-model="innerValue"
       :active-text="activeText"
       :inactive-text="inactiveText"
+      :active-value="activeValue"
+      :inactive-value="inactiveValue"
       :disabled="disabled"
       @change="$emit('change', $event)"
       v-bind="$attrs"
@@ -29,15 +31,17 @@ const props = defineProps({
   labelWidth: { type: [String, Number], default: 100 },
   activeText: String,
   inactiveText: String,
+  activeValue: { type: [Boolean, String, Number], default: true },
+  inactiveValue: { type: [Boolean, String, Number], default: false },
   disabled: Boolean,
+  field: String // New prop for implicit binding
 });
+
+import { useFormField } from '../composables/useFormField';
 
 const emit = defineEmits(['update:modelValue', 'change']);
 
-const innerValue = computed({
-  get: () => !!props.modelValue,
-  set: (val) => emit('update:modelValue', val)
-});
+const { innerValue } = useFormField(props, emit);
 
 const wrapperStyle = computed(() => ({
     display: 'flex',

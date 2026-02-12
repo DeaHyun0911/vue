@@ -39,9 +39,8 @@
     <div id="app">
         <ctv-container aside-width="50%" gap="16px">
             <template #header>
-                <div
-                    style="padding: 10px; background: #f0f2f5; border-bottom: 1px solid #dcdfe6; display: flex; justify-content: space-between; align-items: center;">
-                    <h3>Grid + Form Sync Example</h3>
+                <div style="display: flex; flex-direction: column; gap: 10px; width: 100%;">
+                    <ctv-query-filter :setting="filter" v-model:field="query"></ctv-query-filter>
                     <ctv-tool-box :setting="toolBox"></ctv-tool-box>
                 </div>
             </template>
@@ -54,26 +53,26 @@
             </template>
 
             <!-- Right: Form -->
-            <div class="h-100 flex-column" style="padding: 20px; border-left: 1px solid #eee; overflow-y: auto;">
+            <div class="h-100 flex-column"
+                style="background: #fff; padding: 20px; border: 1px solid var(--color-grid-border-2); overflow-y: auto; border-radius: 4px;">
                 <h4 style="margin-top:0;">Edit Selected Row</h4>
 
                 <!-- Bound to Grid's focusData -->
-                <ctv-form v-bind="formSetting" :model="mainGrid.focusData">
+                <ctv-form v-bind="form" :model="mainGrid.focusData">
                     <ctv-form-item label="Code ID">
-                        <ctv-input v-model="mainGrid.focusData.CD_MST" disabled></ctv-input>
+                        <ctv-input field="CD_MST" disabled></ctv-input>
                     </ctv-form-item>
                     <ctv-form-item label="Code Name">
-                        <ctv-input v-model="mainGrid.focusData.NM_CODE"></ctv-input>
+                        <ctv-input field="NM_CODE"></ctv-input>
                     </ctv-form-item>
                     <ctv-form-item label="System Type">
-                        <ctv-select v-model="mainGrid.focusData.FG_SYS" :options="options.FG_SYS"></ctv-select>
+                        <ctv-select field="FG_SYS" :options="options.FG_SYS"></ctv-select>
                     </ctv-form-item>
                     <ctv-form-item label="Use Y/N">
-                        <ctv-switch v-model="mainGrid.focusData.YN_USE" active-value="Y"
-                            inactive-value="N"></ctv-switch>
+                        <ctv-switch field="YN_USE" active-value="Y" inactive-value="N"></ctv-switch>
                     </ctv-form-item>
                     <ctv-form-item label="Description" style="grid-column: span 2;">
-                        <ctv-textarea v-model="mainGrid.focusData.BIGO" :rows="5"></ctv-textarea>
+                        <ctv-textarea field="BIGO" :rows="5"></ctv-textarea>
                     </ctv-form-item>
                 </ctv-form>
 
@@ -92,6 +91,7 @@
     <script src="../src/assets/SBGrid3/license.js"></script>
     <script src="../src/assets/SBGrid3/sbgrid3.js"></script>
     <script src="../dist/ctv-ui.umd.js"></script>
+    <script src="mock-data.js"></script>
     <script src="test-grid-form.js"></script>
 </body>
 

@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CTV UI Test - Date Types</title>
+    <link rel="stylesheet" href="https://unpkg.com/element-plus/dist/index.css">
+    <link rel="stylesheet" href="../src/assets/SBGrid3/css/sbgrid3.min.css">
+    <link rel="stylesheet" href="../dist/cwws-com-ui.css">
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            height: 100vh;
+            overflow: hidden;
+            font-family: 'Segoe UI', sans-serif;
+            background: #f5f7fa;
+        }
+
+        #app {
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .h-100 {
+            height: 100%;
+        }
+
+        .flex-column {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .layout-container {
+            padding: 16px;
+            height: 100%;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .upper-pane {
+            flex-shrink: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .content-pane {
+            flex: 1;
+            display: flex;
+            gap: 16px;
+            overflow: hidden;
+        }
+
+        .left-pane {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+        }
+
+        .right-pane {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background: #fff;
+            padding: 20px;
+            border: 1px solid #dcdfe6;
+            border-radius: 4px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="app">
+        <div class="layout-container">
+            <!-- Header: Filter & ToolBox -->
+            <div class="upper-pane">
+                <ctv-query-filter :setting="filter" v-model:field="query"></ctv-query-filter>
+                <ctv-tool-box :setting="toolBox"></ctv-tool-box>
+            </div>
+
+            <!-- Content: Grid & Form -->
+            <div class="content-pane">
+                <!-- Left: Grid -->
+                <div class="left-pane">
+                    <ctv-data-grid :setting="mainGrid"></ctv-data-grid>
+                </div>
+
+                <!-- Right: Form -->
+                <div class="right-pane">
+                    <h4 style="margin: 0 0 16px 0; padding-bottom: 10px; border-bottom: 1px solid #eee;">
+                        Date Detail Form
+                    </h4>
+
+                    <ctv-form v-bind="form" :model="mainGrid.focusData">
+                        <ctv-form-item label="ID">
+                            <ctv-input field="ROW_ID" disabled></ctv-input>
+                        </ctv-form-item>
+
+                        <ctv-form-item label="Date (Default)">
+                            <ctv-date field="DATE_COL" type="date"></ctv-date>
+                        </ctv-form-item>
+
+                        <ctv-form-item label="Month">
+                            <ctv-date field="MONTH_COL" type="month"></ctv-date>
+                        </ctv-form-item>
+
+                        <ctv-form-item label="Year">
+                            <ctv-date field="YEAR_COL" type="year"></ctv-date>
+                        </ctv-form-item>
+
+                        <!-- Note: Range types usually bind to arrays. 
+                             If field is single string, might need handling. 
+                             For this demo, we assume focusData can hold separate fields 
+                             or we bind range to array field if available. 
+                             Let's assume implicit binding handles simple fields. 
+                             Range Types in Form might be tricky if data model has separate start/end cols.
+                             Usually range picker binds to one array prop.
+                        -->
+                        <ctv-form-item label="Date Range" style="grid-column: span 2;">
+                            <!-- Binding a range picker in form often requires an array field in data model 
+                                or manual handling. Here we just show the component. 
+                                We'll use a dummy 'DATE_RANGE_MODEL' field. -->
+                            <!-- Or if we want to show it works, we added RANGE_START/END cols.
+                                 A daterange picker needs one array value [start, end]. 
+                                 We'll likely need a computed property in real app, but here we test the component rendering.
+                            -->
+                            <ctv-date type="daterange" start-placeholder="Start Date"
+                                end-placeholder="End Date"></ctv-date>
+                        </ctv-form-item>
+
+                    </ctv-form>
+
+                    <div
+                        style="margin-top: 20px; font-size: 12px; color: #666; background: #f8f9fa; padding: 10px; border-radius: 4px;">
+                        <strong>Live Data Sync:</strong>
+                        <pre>{{ mainGrid.focusData }}</pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+    <script src="https://unpkg.com/element-plus"></script>
+    <script src="../src/assets/SBGrid3/license.js"></script>
+    <script src="../src/assets/SBGrid3/sbgrid3.js"></script>
+    <script src="../dist/ctv-ui.umd.js"></script>
+    <script src="mock-data.js"></script>
+    <script src="test-date-types.js"></script>
+</body>
+
+</html>

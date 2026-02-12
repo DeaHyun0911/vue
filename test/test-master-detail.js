@@ -1,49 +1,7 @@
 
 // test-master-detail.js
 
-// 1. Mock Data Setup
-window.Ctv = window.Ctv || {};
-
-window.Ctv.setCombo = async (targetObj, definitions) => {
-    // Dummy combo data
-    const dummyCombos = {
-        BS_GUBN: [{ value: 'B01', text: 'Business 1' }, { value: 'B02', text: 'Business 2' }],
-        FG_SYS: [{ value: 'S01', text: 'System A' }, { value: 'S02', text: 'System B' }],
-        YN_USE: [{ value: 'Y', text: 'Use' }, { value: 'N', text: 'Unused' }]
-    };
-    Object.keys(definitions).forEach(key => {
-        if (targetObj[key] !== undefined) targetObj[key] = dummyCombos[key] || [];
-    });
-};
-
-window.Ctv.dataQuery = async (options) => {
-    await new Promise(r => setTimeout(r, 100)); // Simulate delay
-    const { funcNm, bParam } = options;
-
-    if (funcNm === "UfnQuery") {
-        // Master Data
-        return {
-            rsData01: [
-                { CD_MST: 'M-001', NM_CODE: 'Human Resources', FG_SYS: 'S01', YN_USE: 'Y', BIGO: 'Core HR Data' },
-                { CD_MST: 'M-002', NM_CODE: 'Finance', FG_SYS: 'S02', YN_USE: 'Y', BIGO: 'Account Data' },
-                { CD_MST: 'M-003', NM_CODE: 'Logistics', FG_SYS: 'S01', YN_USE: 'N', BIGO: 'Deprecated' },
-            ]
-        };
-    } else if (funcNm === "UfnQueryDetail") {
-        // Detail Data
-        const masterCode = bParam && bParam[1] ? bParam[1] : '';
-        const allDetails = [
-            { CD_MST: 'M-001', CD_DTL: 'HR-01', NM_CODE: 'Employee Info', YN_USE: 'Y' },
-            { CD_MST: 'M-001', CD_DTL: 'HR-02', NM_CODE: 'Payroll', YN_USE: 'Y' },
-            { CD_MST: 'M-002', CD_DTL: 'FIN-01', NM_CODE: 'General Ledger', YN_USE: 'Y' },
-            { CD_MST: 'M-002', CD_DTL: 'FIN-02', NM_CODE: 'Accounts Payable', YN_USE: 'Y' },
-        ];
-        return {
-            rsData02: allDetails.filter(d => d.CD_MST === masterCode)
-        };
-    }
-    return {};
-};
+// 1. Mock Data is loaded from mock-data.js
 
 // 2. Vue App
 const { createApp, reactive, toRefs, onMounted } = Vue;
@@ -82,7 +40,7 @@ const app = createApp({
                     }
                 }),
                 query: {
-                    path: "Test.ashx", funcNm: "UfnQuery", dataPath: 'rsData01'
+                    path: "Test.ashx", funcNm: "UfnQueryCodeMaster", dataPath: 'rsData01'
                 }
             },
 
@@ -101,7 +59,7 @@ const app = createApp({
                     ]
                 }),
                 query: {
-                    path: "Test.ashx", funcNm: "UfnQueryDetail",
+                    path: "Test.ashx", funcNm: "UfnQueryCodeDetail",
                     params: () => ['', state.masterGrid.focusData?.CD_MST || ''],
                     dataPath: 'rsData02'
                 }

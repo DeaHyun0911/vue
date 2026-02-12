@@ -1,70 +1,7 @@
 
 // test-grid-layout.js
 
-// 1. Mock Data Setup (Before App Init)
-window.Ctv = window.Ctv || {};
-
-// Mock setCombo
-window.Ctv.setCombo = async (targetObj, definitions) => {
-    console.log("[Mock] setCombo called", definitions);
-    // Simulate async network delay
-    await new Promise(r => setTimeout(r, 100));
-
-    // Dummy combo data
-    const dummyCombos = {
-        BS_GUBN: [
-            { value: 'B014', text: '업무구분1' },
-            { value: 'B015', text: '업무구분2' }
-        ],
-        FG_SYS: [
-            { value: 'S01', text: '시스템1' },
-            { value: 'S02', text: '시스템2' }
-        ],
-        YN_USE: [
-            { value: 'Y', text: '사용' },
-            { value: 'N', text: '미사용' }
-        ]
-    };
-
-    Object.keys(definitions).forEach(key => {
-        if (targetObj[key] !== undefined) {
-            targetObj[key] = dummyCombos[key] || [];
-        }
-    });
-};
-
-// Mock dataQuery
-window.Ctv.dataQuery = async (options) => {
-    console.log("[Mock] dataQuery called", options);
-    await new Promise(r => setTimeout(r, 300)); // Simulate delay
-
-    const { funcNm, bParam } = options;
-
-    if (funcNm === "UfnQuery") {
-        // Return Master Data
-        return {
-            rsData01: [
-                { CD_MST: 'M001', NM_CODE: '인사코드', FG_SYS: 'S01', LENG: '4', BIGO: '인사 관련 마스터', USE_YN: 'Y' },
-                { CD_MST: 'M002', NM_CODE: '급여코드', FG_SYS: 'S02', LENG: '4', BIGO: '급여 관련 마스터', USE_YN: 'Y' },
-                { CD_MST: 'M003', NM_CODE: '회계코드', FG_SYS: 'S01', LENG: '3', BIGO: '회계 관련 마스터', USE_YN: 'N' },
-            ]
-        };
-    } else if (funcNm === "UfnQueryDetail") {
-        // Return Detail Data (Simulate filtering by CD_MST from bParam if possible, or just return dummy)
-        // bParam[1] is CD_MST usually based on Grid001n params
-        const cdMst = bParam && bParam[1] ? bParam[1] : 'ALL';
-
-        return {
-            rsData02: [
-                { CD_MST: cdMst, CD_DTL: 'D001', NM_CODE: '상세1', FG_SYS: 'S01', YN_USE: 'Y', BIGO: 'Detail 1' },
-                { CD_MST: cdMst, CD_DTL: 'D002', NM_CODE: '상세2', FG_SYS: 'S01', YN_USE: 'Y', BIGO: 'Detail 2' },
-                { CD_MST: cdMst, CD_DTL: 'D003', NM_CODE: '상세3', FG_SYS: 'S02', YN_USE: 'N', BIGO: 'Detail 3' },
-            ]
-        };
-    }
-
-    return {};
-};
+// 1. Mock Data is loaded from mock-data.js
 
 // 2. Vue App Setup
 const { createApp, ref, reactive, toRefs, onMounted, computed, watch } = Vue;
@@ -121,7 +58,7 @@ const app = createApp({
                 }),
                 query: {
                     path: "Test.ashx",
-                    funcNm: "UfnQuery",
+                    funcNm: "UfnQueryCodeMaster",
                     dataPath: 'rsData01'
                 }
             },
@@ -144,7 +81,7 @@ const app = createApp({
                 }),
                 query: {
                     path: "Test.ashx",
-                    funcNm: "UfnQueryDetail",
+                    funcNm: "UfnQueryCodeDetail",
                     params: () => {
                         // Get selected master code safely
                         const masterCode = state.masterGrid.focusData?.CD_MST || '';

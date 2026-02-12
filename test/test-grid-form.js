@@ -1,36 +1,7 @@
 
 // test-grid-form.js
 
-// 1. Mock Data Setup
-window.Ctv = window.Ctv || {};
-
-window.Ctv.setCombo = async (targetObj, definitions) => {
-    // Dummy combo data
-    const dummyCombos = {
-        FG_SYS: [{ value: 'S01', text: 'System A' }, { value: 'S02', text: 'System B' }],
-        YN_USE: [{ value: 'Y', text: 'Use' }, { value: 'N', text: 'Unused' }]
-    };
-    Object.keys(definitions).forEach(key => {
-        if (targetObj[key] !== undefined) targetObj[key] = dummyCombos[key] || [];
-    });
-};
-
-window.Ctv.dataQuery = async (options) => {
-    await new Promise(r => setTimeout(r, 100)); // Simulate delay
-    const { funcNm } = options;
-
-    if (funcNm === "UfnQuery") {
-        return {
-            rsData01: [
-                { CD_MST: 'ITEM-001', NM_CODE: 'Desktop PC', FG_SYS: 'S01', YN_USE: 'Y', BIGO: 'High performance setup' },
-                { CD_MST: 'ITEM-002', NM_CODE: 'Laptop', FG_SYS: 'S02', YN_USE: 'Y', BIGO: 'Portable work station' },
-                { CD_MST: 'ITEM-003', NM_CODE: 'Monitor', FG_SYS: 'S01', YN_USE: 'Y', BIGO: '4K Display' },
-                { CD_MST: 'ITEM-004', NM_CODE: 'Keyboard', FG_SYS: 'S01', YN_USE: 'N', BIGO: 'Mechanical' },
-            ]
-        };
-    }
-    return {};
-};
+// 1. Mock Data is loaded from mock-data.js
 
 // 2. Vue App
 const { createApp, reactive, toRefs, onMounted } = Vue;
@@ -46,8 +17,29 @@ const app = createApp({
                 target: 'group1'
             },
 
-            formSetting: {
-                title: "Item Details",
+            query: {
+                FG_SYS: '',
+                NM_CODE: ''
+            },
+
+            filter: {
+                columns: 3,
+                target: 'group1',
+                fields: [
+                    {
+                        field: "FG_SYS",
+                        component: "ctv-select",
+                        props: { title: "System Type", options: [] } // Will be updated in onMounted
+                    },
+                    {
+                        field: "NM_CODE",
+                        component: "ctv-input",
+                        props: { title: "Code Name" }
+                    }
+                ]
+            },
+
+            form: {
                 columns: 2,
                 labelWidth: '100px'
             },
@@ -70,13 +62,17 @@ const app = createApp({
                     // No explicit rowChange needed for form sync, handled internally by CtvDataGrid via focusData binding
                 }),
                 query: {
-                    path: "Test.ashx", funcNm: "UfnQuery", dataPath: 'rsData01'
+                    path: "Test.ashx", funcNm: "UfnQueryCodeMaster", dataPath: 'rsData01'
                 }
             }
         });
 
         onMounted(async () => {
             await window.Ctv.setCombo(state.options, { FG_SYS: {}, YN_USE: {} });
+
+            // Sync options to filter config
+            const sysField = state.filter.fields.find(f => f.field === 'FG_SYS');
+            if (sysField) sysField.props.options = state.options.FG_SYS;
         });
 
         return { ...toRefs(state) };

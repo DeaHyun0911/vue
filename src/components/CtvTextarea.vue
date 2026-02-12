@@ -61,26 +61,11 @@ const props = defineProps({
   field: String // New prop for implicit binding
 });
 
-import { inject } from 'vue';
-const formModel = inject('ctvFormModel', null);
+import { useFormField } from '../composables/useFormField';
 
 const emit = defineEmits(['update:modelValue', 'change', 'input', 'blur', 'focus']);
 
-const innerValue = computed({
-  get: () => {
-      // 우선순위: field prop이 있고 폼 모델이 제공되면 그것을 사용
-      if (props.field && formModel && formModel[props.field] !== undefined) {
-          return formModel[props.field];
-      }
-      return props.modelValue;
-  },
-  set: (val) => {
-      if (props.field && formModel) {
-          formModel[props.field] = val;
-      }
-      emit('update:modelValue', val);
-  }
-});
+const { innerValue } = useFormField(props, emit);
 
 const errorMessage = ref('');
 const hasError = computed(() => !!errorMessage.value);

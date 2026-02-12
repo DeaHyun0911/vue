@@ -1,5 +1,6 @@
 {
   "name": "cwws-com-ui",
+  "type": "module",
   "version": "1.0.0",
   "private": true,
   "description": "CWWS ctv-ui bundle (includes es-hangul)",
