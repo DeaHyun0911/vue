@@ -1,18 +1,12 @@
 (function () {
-    // Mock Ctv object (use the global one if available, otherwise define mock)
-    // The library has already set window.Ctv if loaded properly.
-    // But here we need to override setCombo and dataQuery for mocking.
-
     const { ref, reactive, onMounted, computed } = window.Vue;
 
-    // Preserve existing utilities if any
+    // ===== Mock 설정 =====
     const originalCtv = window.Ctv || {};
 
     window.Ctv = {
         ...originalCtv,
-        // Mock setCombo 함수
         setCombo: async function (options, config) {
-            // Mock 콤보 데이터
             const mockComboData = {
                 MC_MENU: [
                     { value: 'M001', label: '시스템관리' },
@@ -46,59 +40,78 @@
                 ]
             };
 
-            // 각 옵션에 mock 데이터 할당
             for (const key in config) {
                 if (mockComboData[key]) {
                     options[key] = mockComboData[key];
                 }
             }
 
-            // 비동기 처리 시뮬레이션
             return new Promise(resolve => setTimeout(resolve, 500));
         },
     };
 
-    // Assign mock dataQuery function to window.Ctv
     window.Ctv.dataQuery = async function (config) {
-    };
-
-    // Assign mock dataQuery function to window.Ctv
-    window.Ctv.dataQuery = async function (config) {
-        // ... (mock dataQuery implementation) - Just minimal for dataQuery, restore previous mock logic if needed, but here focus on closing it.
         const mockGridData = [
             {
-                MC_MENU: 'M001',
-                ID_PGM_TOP: '',
-                NO_PGM: 0,
-                ID_PGM: 'BPA100N',
-                NM_KOR_PGM: '프로그램등록',
-                NM_ENG_PGM: 'Program Registration',
-                NM_CHN_PGM: '程序注册',
-                MC_AMD_TYPE: 'A01',
-                MC_PGM_TYPE: 'T01',
-                PGM_FOLDER: 'F01',
-                YN_USE: 'Y',
-                MC_MODL_TYPE: 'MD01',
-                DT_PATCH_FIR: '2024-01-01',
-                DT_PATCH_LST: '2024-12-31',
-                BIGO: '기본 프로그램',
-                TM_REG: '2024-01-01 09:00:00',
-                TM_UPT: '2024-12-31 18:00:00',
+                MC_MENU: 'M001', ID_PGM_TOP: '', NO_PGM: 0,
+                ID_PGM: 'BPA100N', NM_KOR_PGM: '프로그램등록',
+                NM_ENG_PGM: 'Program Registration', NM_CHN_PGM: '程序注册',
+                MC_AMD_TYPE: 'A01', MC_PGM_TYPE: 'T01', PGM_FOLDER: 'F01',
+                YN_USE: 'Y', MC_MODL_TYPE: 'MD01',
+                DT_PATCH_FIR: '2024-01-01', DT_PATCH_LST: '2024-12-31',
+                BIGO: '기본 프로그램 관리 화면',
+                TM_REG: '2024-01-01 09:00:00', TM_UPT: '2024-12-31 18:00:00',
                 ROWID: 'R001'
+            },
+            {
+                MC_MENU: 'M001', ID_PGM_TOP: '', NO_PGM: 1,
+                ID_PGM: 'BPA200N', NM_KOR_PGM: '사용자관리',
+                NM_ENG_PGM: 'User Management', NM_CHN_PGM: '用户管理',
+                MC_AMD_TYPE: 'A01', MC_PGM_TYPE: 'T01', PGM_FOLDER: 'F01',
+                YN_USE: 'Y', MC_MODL_TYPE: 'MD01',
+                DT_PATCH_FIR: '2024-02-01', DT_PATCH_LST: '2024-11-30',
+                BIGO: '사용자 등록 및 권한 관리',
+                TM_REG: '2024-02-01 09:00:00', TM_UPT: '2024-11-30 18:00:00',
+                ROWID: 'R002'
+            },
+            {
+                MC_MENU: 'M002', ID_PGM_TOP: '', NO_PGM: 2,
+                ID_PGM: 'HRM100N', NM_KOR_PGM: '인사기본등록',
+                NM_ENG_PGM: 'HR Basic Registration', NM_CHN_PGM: '人事基本登记',
+                MC_AMD_TYPE: 'A02', MC_PGM_TYPE: 'T01', PGM_FOLDER: 'F03',
+                YN_USE: 'Y', MC_MODL_TYPE: 'MD03',
+                DT_PATCH_FIR: '2024-03-01', DT_PATCH_LST: '2024-10-15',
+                BIGO: '인사 기본정보 입력',
+                TM_REG: '2024-03-01 09:00:00', TM_UPT: '2024-10-15 18:00:00',
+                ROWID: 'R003'
+            },
+            {
+                MC_MENU: 'M003', ID_PGM_TOP: '', NO_PGM: 3,
+                ID_PGM: 'PAY100N', NM_KOR_PGM: '급여계산',
+                NM_ENG_PGM: 'Payroll Calculation', NM_CHN_PGM: '工资计算',
+                MC_AMD_TYPE: 'A02', MC_PGM_TYPE: 'T02', PGM_FOLDER: 'F02',
+                YN_USE: 'N', MC_MODL_TYPE: 'MD02',
+                DT_PATCH_FIR: '2024-04-01', DT_PATCH_LST: '2024-09-30',
+                BIGO: '월 급여 계산 및 조회 화면',
+                TM_REG: '2024-04-01 09:00:00', TM_UPT: '2024-09-30 18:00:00',
+                ROWID: 'R004'
+            },
+            {
+                MC_MENU: 'M004', ID_PGM_TOP: '', NO_PGM: 4,
+                ID_PGM: 'ACC100N', NM_KOR_PGM: '전표입력',
+                NM_ENG_PGM: 'Voucher Entry', NM_CHN_PGM: '凭证录入',
+                MC_AMD_TYPE: 'A03', MC_PGM_TYPE: 'T01', PGM_FOLDER: 'F01',
+                YN_USE: 'Y', MC_MODL_TYPE: 'MD01',
+                DT_PATCH_FIR: '2024-05-01', DT_PATCH_LST: '2024-12-01',
+                BIGO: '',
+                TM_REG: '2024-05-01 09:00:00', TM_UPT: '2024-12-01 18:00:00',
+                ROWID: 'R005'
             }
-            // ... (abbreviated for brevity, but I should probably include full mock data or just rely on what was there if I could select range better)
-            // Wait, I am replacing a huge range. I need to make sure I don't lose the mock data.
-            // The issue is that I pasted `window.top.gSInfo...` inside dataQuery in previous edits?
-            // No, previous edit inserted `window.top...` and `window.onPageSetup` inside `dataQuery`!
-            // That was the mistake.
         ];
 
-        // 비동기 처리 시뮬레이션
         return new Promise(resolve => {
             setTimeout(() => {
-                resolve({
-                    rsData01: mockGridData
-                });
+                resolve({ rsData01: mockGridData });
             }, 300);
         });
     };
@@ -112,7 +125,7 @@
         console.log('Loading complete');
     };
 
-    // page setup function
+    // ===== 페이지 설정 =====
     window.onPageSetup = function () {
         const comboLoaded = ref(false);
 
@@ -126,78 +139,56 @@
             MC_MODL_TYPE: [],
         });
 
+        // syncForm용 폼 상태 (그리드 포커스행과 동기화할 필드들)
+        const form = reactive({
+            ID_PGM: '',
+            NM_KOR_PGM: '',
+            NM_ENG_PGM: '',
+            YN_USE: '',
+            BIGO: '',
+        });
+
         // 검색 필터 필드
         const filterFields = computed(() => [
             {
                 component: 'ctv-select',
                 field: 'MC_MENU',
-                props: {
-                    title: '매뉴대분류',
-                    options: options.MC_MENU
-                }
+                props: { title: '매뉴대분류', options: options.MC_MENU }
             },
             {
                 component: 'ctv-select',
                 field: 'MC_PGM_TYPE',
-                props: {
-                    title: '프로그램타입',
-                    options: options.MC_PGM_TYPE
-                }
+                props: { title: '프로그램타입', options: options.MC_PGM_TYPE }
             },
             {
                 component: 'ctv-input',
                 field: 'ID_PGM',
-                props: {
-                    title: '프로그램ID',
-                    placeholder: '프로그램ID 입력'
-                }
+                props: { title: '프로그램ID', placeholder: '프로그램ID 입력' }
             },
             {
                 component: 'ctv-input',
                 field: 'NM_KOR_PGM',
-                props: {
-                    title: '프로그램명',
-                    placeholder: '프로그램명 입력'
-                }
+                props: { title: '프로그램명', placeholder: '프로그램명 입력' }
             }
         ]);
 
-        // 그리드 설정 함수
+        // 그리드 설정 (gridConfig 함수)
         const gridConfig = (state) => ({
             defaultUnit: '%',
             columns: [
                 {
-                    field: 'MC_MENU',
-                    caption: '메뉴대분류',
+                    field: 'MC_MENU', caption: '메뉴대분류',
                     colType: 'C|NN|STR|M|SP',
                     inputCombo: options.MC_MENU,
-                    groupTitle: {
-                        aggregates: [{
-                            func: (rows) => rows[0]?.NM_KOR_PGM,
-                            field: 'MC_MENU'
-                        }],
-                        title: { template: `{{MC_MENU}}` }
-                    },
                 },
                 { field: 'ID_PGM_TOP', caption: '상위ID', colType: 'STR|C|NN|S' },
                 { field: 'NO_PGM', caption: '순서', colType: 'NUM|C|NN|XS' },
-                {
-                    field: 'ID_PGM',
-                    caption: '프로그램ID',
-                    colType: "STR|L|NN|M",
-                },
+                { field: 'ID_PGM', caption: '프로그램ID', colType: 'STR|L|NN|M' },
                 { field: 'NM_KOR_PGM', caption: '프로그램명(한국어)', colType: 'STR|L|NN|XL' },
                 { field: 'NM_ENG_PGM', caption: '프로그램명(영어)', colType: 'STR|L|XL' },
                 { field: 'NM_CHN_PGM', caption: '프로그램명(중국어)', colType: 'STR|L|XL' },
                 { field: 'MC_AMD_TYPE', caption: '권한분류', colType: 'STR|C|NN|M', type: 'combo', combo: options.MC_AMD_TYPE },
-                {
-                    field: 'MC_PGM_TYPE',
-                    caption: '타입',
-                    colType: 'STR|C|NN|M',
-                    type: 'combo',
-                    inputCombo: options.MC_PGM_TYPE,
-                    itemContent: (label, value) => `${value} | ${label}`
-                },
+                { field: 'MC_PGM_TYPE', caption: '타입', colType: 'STR|C|NN|M', type: 'combo', inputCombo: options.MC_PGM_TYPE },
                 { field: 'PGM_FOLDER', caption: '폴더', colType: 'STR|C|NN|M', type: 'combo', combo: options.PGM_FOLDER },
                 { field: 'YN_USE', caption: '사용유무', colType: 'STR|C|NN|S', type: 'combo', combo: options.YN_USE },
                 { field: 'MC_MODL_TYPE', caption: '업무모듈구분', colType: 'STR|C|NN|M', type: 'combo', combo: options.MC_MODL_TYPE },
@@ -211,40 +202,35 @@
             rowCss: (data) => data.NO_PGM == 0 ? 'row-highlight' : '',
         });
 
-        // 조회 설정 (filterRef로 필터 참조)
-        const query = {
-            path: "Bpa100n.ashx",
-            funcNm: "UfnQuery",
-            filterRef: 'filter1',  // 필터 ID 참조
-            params: (filterValues) => [
-                window.top.gSInfo[window.ERPSDB],
-                filterValues.ID_PGM || '',
-                filterValues.NM_KOR_PGM || '',
-                filterValues.MC_MENU || '',
-                filterValues.MC_PGM_TYPE || '',
-            ],
-            dataPath: 'rsData01'
-        };
-
-        const save = {
-            path: "Bpa100n.ashx",
-            funcNm: 'UfnSave',
-            bParam: [top.gSInfo[window.ERPSDB], '', '']
-        };
-
-        // 초기화
-        onMounted(async () => {
-            await Ctv.setCombo(options, {
-                MC_MENU: { CODE: "B019", FLAG: "0-Y" },
-                MC_AMD_TYPE: { CODE: "B020", FLAG: "0" },
-                MC_PGM_TYPE: { CODE: "B017", FLAG: "0" },
-                PGM_FOLDER: { CODE: "B003", FLAG: "0" },
-                YN_USE: { CODE: "B031", FLAG: "0" },
-                MC_MODL_TYPE: { CODE: "B050", FLAG: "0" },
-            });
-
-            // 콤보 데이터 로드 완료
-            comboLoaded.value = true;
+        // ===== 통합 setting 객체 (syncForm 포함) =====
+        const masterGrid = reactive({
+            id: 'grid1',
+            title: '프로그램등록',
+            editable: true,
+            gridConfig: gridConfig,
+            query: {
+                path: 'Bpa100n.ashx',
+                funcNm: 'UfnQuery',
+                filterRef: 'filter1',
+                params: (filterValues) => [
+                    window.top.gSInfo[window.ERPSDB],
+                    filterValues.ID_PGM || '',
+                    filterValues.NM_KOR_PGM || '',
+                    filterValues.MC_MENU || '',
+                    filterValues.MC_PGM_TYPE || '',
+                ],
+                dataPath: 'rsData01'
+            },
+            save: {
+                path: 'Bpa100n.ashx',
+                funcNm: 'UfnSave',
+                bParam: [window.top.gSInfo?.ERPSDB || '', '', '']
+            },
+            // syncForm: 그리드 포커스행 ↔ form 객체 양방향 동기화
+            syncForm: {
+                state: computed(() => form),
+                columns: ['ID_PGM', 'NM_KOR_PGM', 'NM_ENG_PGM', 'YN_USE', 'BIGO']
+            }
         });
 
         const toolBoxConfig = {
@@ -252,25 +238,32 @@
             right: ['save', 'excel']
         };
 
+        // 초기화
+        onMounted(async () => {
+            await Ctv.setCombo(options, {
+                MC_MENU: { CODE: 'B019', FLAG: '0-Y' },
+                MC_AMD_TYPE: { CODE: 'B020', FLAG: '0' },
+                MC_PGM_TYPE: { CODE: 'B017', FLAG: '0' },
+                PGM_FOLDER: { CODE: 'B003', FLAG: '0' },
+                YN_USE: { CODE: 'B031', FLAG: '0' },
+                MC_MODL_TYPE: { CODE: 'B050', FLAG: '0' },
+            });
+            comboLoaded.value = true;
+        });
+
         return {
             comboLoaded,
             options,
             filterFields,
-            gridConfig,
-            query,
-            save,
+            masterGrid,
+            form,
             toolBoxConfig
         };
     };
 
-
-    // Initialize Vue App
-    // Wait for DOM content loaded if necessary, or just run immediately if script is deferred/at bottom
-
-    // Create the app using Ctv library
+    // ===== Vue App 초기화 =====
     const app = Vue.createApp({
         setup() {
-            // Execute the page setup logic
             if (typeof window.onPageSetup === 'function') {
                 return window.onPageSetup();
             }
@@ -278,16 +271,14 @@
         }
     });
 
-    // Install Ctv plugin (if it has install method)
     if (window.Ctv && typeof window.Ctv.install === 'function') {
         app.use(window.Ctv);
     } else if (window.CtvUI && typeof window.CtvUI.install === 'function') {
-        app.use(window.CtvUI); // Fallback
+        app.use(window.CtvUI);
     } else if (window.CtvUI && window.CtvUI.default && typeof window.CtvUI.default.install === 'function') {
-        app.use(window.CtvUI.default); // UMD default export quirk
+        app.use(window.CtvUI.default);
     }
 
-    // Mount to #app
     app.mount('#app');
 
 })();

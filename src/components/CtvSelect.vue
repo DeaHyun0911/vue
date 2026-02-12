@@ -19,7 +19,7 @@
         v-model="innerValue"
         :placeholder="placeholder"
         :empty-values="[null, undefined]"
-        :value-on-clear="null"
+        :value-on-clear="''"
         clearable
         :disabled="disabled"
         :readonly="readonly"
@@ -59,7 +59,7 @@ const props = defineProps({
   modelValue: [String, Number, Array],
   title: String,
   options: { type: Array, default: () => [] },
-  placeholder: String,
+  placeholder: { type: String, default: '선택하세요' },
   disabled: Boolean,
   readonly: Boolean,
   multiple: Boolean,
@@ -72,7 +72,10 @@ const emit = defineEmits(['update:modelValue', 'change', 'blur', 'focus']);
 
 const innerValue = computed({
   get: () => props.modelValue,
-  set: (val) => emit('update:modelValue', val)
+  set: (val) => {
+    const newValue = (val === null || val === undefined) ? "" : val;
+    emit('update:modelValue', newValue);
+  }
 });
 
 const errorMessage = ref('');
@@ -84,7 +87,7 @@ const onBlur = (e) => {
 };
 
 const validate = () => {
-    if (props.required && (!innerValue.value || (Array.isArray(innerValue.value) && innerValue.value.length === 0))) {
+    if (props.required && (!innerValue.value || innerValue.value === "" || (Array.isArray(innerValue.value) && innerValue.value.length === 0))) {
         errorMessage.value = '필수 선택 항목입니다.';
         return false;
     }

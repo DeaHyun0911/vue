@@ -35,7 +35,8 @@ if (typeof window !== 'undefined' && window.Vue) {
 const Ctv = {
     install,
     ...Utils,
-    componentRegistry
+    componentRegistry,
+    get: (id) => componentRegistry.get(id)
 };
 
 if (typeof window !== 'undefined') {

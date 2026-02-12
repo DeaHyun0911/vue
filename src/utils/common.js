@@ -88,7 +88,10 @@ export async function setCombo(targetOptions, codeMap) {
 
     if (resultList && Array.isArray(resultList)) {
         keys.forEach((key, index) => {
-            targetOptions[key] = resultList[index] || [];
+            const data = resultList[index] || [];
+            // 로딩 완료 플래그 추가 (CtvDataGrid 자동 렌더링 제어용)
+            Object.defineProperty(data, '__loaded', { value: true, enumerable: false, writable: true });
+            targetOptions[key] = data;
         });
     } else {
         console.warn("[ComboMap] 데이터를 로드하지 못했습니다.");

@@ -8,33 +8,31 @@
       v-if="title" 
       class="ctv-label" 
       :class="labelClasses"
-      :style="{ width: labelWidth + 'px' }"
+      :style="labelStyle"
     >
       {{ title }}
     </label>
     
-    <div class="ctv-body">
+    <div class="ctv-body" :style="{ width: '100%' }">
       <el-input
         ref="elInput"
         v-model="innerValue"
-        :type="type"
+        type="textarea"
         :placeholder="placeholder"
         :disabled="disabled"
         :readonly="readonly"
         :maxlength="maxlength"
         :minlength="minlength"
+        :rows="rows"
+        :autosize="autosize"
+        :resize="resize"
+        :input-style="{ minHeight: minHeight }"
         @focus="$emit('focus', $event)"
         @blur="onBlur"
         @change="$emit('change', $event)"
         @input="$emit('input', $event)"
         v-bind="$attrs"
       >
-        <template v-if="$slots.prepend" #prepend>
-            <slot name="prepend"></slot>
-        </template>
-        <template v-if="$slots.append" #append>
-            <slot name="append"></slot>
-        </template>
       </el-input>
       <div v-if="hasError" class="ctv-error-msg">{{ errorMessage }}</div>
     </div>
@@ -42,21 +40,24 @@
 </template>
 
 <script setup>
-import { computed, ref, watch } from 'vue';
+import { computed, ref } from 'vue';
 
 const props = defineProps({
   modelValue: [String, Number],
   title: String,
-  type: { type: String, default: 'text' },
   placeholder: String,
   disabled: Boolean,
   readonly: Boolean,
   maxlength: [String, Number],
   minlength: [String, Number],
   labelAlign: { type: String, default: 'left' },
-  labelWidth: { type: [String, Number], default: 100 }, // Default label width based on typical ERP layout
+  labelWidth: { type: [String, Number], default: 100 },
   required: Boolean,
-  validate: [Object, String, Function], // validation rule
+  rows: { type: [Number, String], default: 2 },
+  autosize: { type: [Boolean, Object], default: false },
+  labelPosition: { type: String, default: 'left' }, // left | top
+  resize: { type: String, default: 'none' },
+  minHeight: { type: [String, Number], default: '' },
   field: String // New prop for implicit binding
 });
 
@@ -67,6 +68,7 @@ const emit = defineEmits(['update:modelValue', 'change', 'input', 'blur', 'focus
 
 const innerValue = computed({
   get: () => {
+      // 우선순위: field prop이 있고 폼 모델이 제공되면 그것을 사용
       if (props.field && formModel && formModel[props.field] !== undefined) {
           return formModel[props.field];
       }
@@ -93,15 +95,31 @@ const validate = () => {
         errorMessage.value = '필수 입력 항목입니다.';
         return false;
     }
-    // Add more validation logic if needed (regex, function via props.validate)
     errorMessage.value = '';
     return true;
 };
 
 const wrapperStyle = computed(() => ({
     display: 'flex',
-    alignItems: 'center',
+    flexDirection: props.labelPosition === 'top' ? 'column' : 'row',
+    alignItems: props.labelPosition === 'top' ? 'stretch' : 'flex-start',
+    width: '100%'
 }));
+
+const labelStyle = computed(() => {
+    if (props.labelPosition === 'top') {
+        return {
+            width: '100%',
+            textAlign: 'left',
+            marginBottom: '5px'
+        };
+    }
+    return {
+        width: props.labelWidth + 'px',
+        alignSelf: 'flex-start',
+        marginTop: '5px'
+    };
+});
 
 const labelClasses = computed(() => ({
     'is-required': props.required,
@@ -112,10 +130,30 @@ defineExpose({ validate });
 </script>
 
 <style scoped>
-:deep(.el-input__wrapper) {
+.ctv-wrapper {
+  margin-bottom: 5px;
+}
+.ctv-label {
+  font-weight: bold;
+  margin-right: 10px;
+  text-align: right;
+  font-size: 13px;
+  color: #606266;
+}
+.ctv-label.align-left { text-align: left; }
+.ctv-label.align-center { text-align: center; }
+.ctv-body {
+  flex: 1;
+}
+.ctv-error-msg {
+  color: #f56c6c;
+  font-size: 12px;
+  margin-top: 2px;
+}
+:deep(.el-textarea__inner) {
     box-shadow: 0 0 0 1px #dcdfe6 inset;
 }
-:deep(.el-input__wrapper.is-focus) {
+:deep(.el-textarea__inner:focus) {
     box-shadow: 0 0 0 1px #409eff inset;
 }
 </style>

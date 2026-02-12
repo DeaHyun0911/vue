@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CTV UI Test - Master/Detail + Form</title>
+
+    <!-- Element Plus CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/element-plus/dist/index.css">
+    <!-- SBGrid3 CSS -->
+    <link rel="stylesheet" href="../src/assets/SBGrid3/css/sbgrid3.min.css">
+    <!-- CTV UI CSS -->
+    <link rel="stylesheet" href="../dist/cwws-com-ui.css">
+
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            height: 100vh;
+            overflow: hidden;
+            font-family: 'Segoe UI', sans-serif;
+        }
+
+        #app {
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .h-100 {
+            height: 100%;
+        }
+
+        .flex-column {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="app">
+        <ctv-container aside-width="50%" gap="16px">
+            <template #header>
+                <div
+                    style="padding: 10px; background: #f0f2f5; border-bottom: 1px solid #dcdfe6; display: flex; justify-content: space-between; align-items: center;">
+                    <h3>Master / Detail + Form Sync Test</h3>
+                    <ctv-tool-box :setting="toolBox"></ctv-tool-box>
+                </div>
+            </template>
+
+            <!-- Left: Master Grid -->
+            <template #aside>
+                <div class="h-100 flex-column">
+                    <ctv-data-grid id="grid1" :setting="masterGrid"></ctv-data-grid>
+                </div>
+            </template>
+
+            <!-- Right: Detail Grid + Form -->
+            <div class="h-100 flex-column">
+                <!-- Detail Grid (Top) -->
+                <div style="flex: 1; min-height: 0;">
+                    <ctv-data-grid id="grid2" :setting="detailGrid"></ctv-data-grid>
+                </div>
+
+                <!-- Form (Bottom, synced with Master Grid) -->
+                <div style="height: 200px; border-top: 1px solid #eee; padding-top: 10px;">
+                    <h4>Master Detail Form (Syncs with Left Grid)</h4>
+                    <ctv-form v-bind="formSetting" :model="masterGrid.focusData">
+                        <ctv-form-item label="마스터코드">
+                            <ctv-input v-model="masterGrid.focusData.CD_MST" disabled></ctv-input>
+                        </ctv-form-item>
+                        <ctv-form-item label="마스터명">
+                            <ctv-input v-model="masterGrid.focusData.NM_CODE"></ctv-input>
+                        </ctv-form-item>
+                        <ctv-form-item label="시스템구분">
+                            <ctv-select v-model="masterGrid.focusData.FG_SYS" :options="options.FG_SYS"></ctv-select>
+                        </ctv-form-item>
+                        <ctv-form-item label="비고" style="grid-column: span 3;">
+                            <ctv-textarea v-model="masterGrid.focusData.BIGO" :rows="3"></ctv-textarea>
+                        </ctv-form-item>
+                    </ctv-form>
+                </div>
+            </div>
+        </ctv-container>
+    </div>
+
+    <!-- Dependencies -->
+    <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+    <script src="https://unpkg.com/element-plus"></script>
+    <script src="../src/assets/SBGrid3/license.js"></script>
+    <script src="../src/assets/SBGrid3/sbgrid3.js"></script>
+
+    <!-- CTV UI Library (Using UMD build) -->
+    <script src="../dist/ctv-ui.umd.js"></script>
+
+    <!-- Test Logic -->
+    <script src="test-grid-layout.js"></script>
+</body>
+
+</html>

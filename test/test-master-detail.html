@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CTV UI Test - Master/Detail Grid</title>
+    <link rel="stylesheet" href="https://unpkg.com/element-plus/dist/index.css">
+    <link rel="stylesheet" href="../src/assets/SBGrid3/css/sbgrid3.min.css">
+    <link rel="stylesheet" href="../dist/cwws-com-ui.css">
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            height: 100vh;
+            overflow: hidden;
+            font-family: 'Segoe UI', sans-serif;
+        }
+
+        #app {
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .h-100 {
+            height: 100%;
+        }
+
+        .flex-column {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="app">
+        <ctv-container aside-width="40%" gap="16px">
+            <template #header>
+                <div
+                    style="padding: 10px; background: #f0f2f5; border-bottom: 1px solid #dcdfe6; display: flex; justify-content: space-between; align-items: center;">
+                    <h3>Master / Detail Grid Example</h3>
+                    <ctv-tool-box :setting="toolBox"></ctv-tool-box>
+                </div>
+            </template>
+
+            <!-- Left: Master Grid -->
+            <template #aside>
+                <div class="h-100 flex-column">
+                    <ctv-data-grid id="grid1" :setting="masterGrid"></ctv-data-grid>
+                </div>
+            </template>
+
+            <!-- Right: Detail Grid -->
+            <div class="h-100 flex-column">
+                <ctv-data-grid id="grid2" :setting="detailGrid"></ctv-data-grid>
+            </div>
+        </ctv-container>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+    <script src="https://unpkg.com/element-plus"></script>
+    <script src="../src/assets/SBGrid3/license.js"></script>
+    <script src="../src/assets/SBGrid3/sbgrid3.js"></script>
+    <script src="../dist/ctv-ui.umd.js"></script>
+    <script src="test-master-detail.js"></script>
+</body>
+
+</html>

@@ -14,16 +14,28 @@
             v-bind="field.props"
             :model-value="getModelValue(field)"
             @update:model-value="handleUpdate(field, $event)"
+            @keyup.enter="handleQuery"
           />
         </div>
       </div>
       
       <!-- 버튼 영역 -->
       <div v-if="showButtons" class="button-group">
-        <ctv-button type="primary" icon="Search" @click="handleQuery">
+        <ctv-button 
+            v-if="resolvedButtons.query.visible" 
+            type="primary" 
+            icon="Search" 
+            :disabled="resolvedButtons.query.disabled"
+            @click="handleQuery"
+        >
           {{ buttonLabels.query }}
         </ctv-button>
-        <ctv-button icon="Refresh" @click="handleReset">
+        <ctv-button 
+            v-if="resolvedButtons.reset.visible"
+            icon="Refresh" 
+            :disabled="resolvedButtons.reset.disabled"
+            @click="handleReset"
+        >
           {{ buttonLabels.reset }}
         </ctv-button>
         
@@ -35,7 +47,7 @@
 </template>
 
 <script setup>
-import { reactive, computed, watch, onMounted } from 'vue';
+import { reactive, computed, watch, onMounted, nextTick } from 'vue';
 import componentRegistry from '../utils/componentRegistry.js';
 
 const props = defineProps({
@@ -86,12 +98,35 @@ const props = defineProps({
     })
   },
   /**
+   * 버튼 제어 (보임/숨김, 비활성화)
+   * 예: { query: { visible: true, disabled: false }, reset: { visible: false } }
+   */
+  buttons: {
+    type: Object,
+    default: () => ({})
+  },
+  /**
    * 컴포넌트 ID (레지스트리 등록용)
    */
   id: {
     type: String,
     default: null
-  }
+  },
+  setting: { type: Object, default: null }
+});
+
+const mergedSetting = computed(() => {
+    const settings = props.setting || {};
+    return {
+        columns: props.columns !== 12 ? props.columns : (settings.columns || 12),
+        fields: (props.fields && props.fields.length) ? props.fields : (settings.fields || []),
+        target: props.target || settings.target,
+        group: props.group || settings.group,
+        showButtons: props.showButtons !== true ? props.showButtons : (settings.showButtons !== undefined ? settings.showButtons : true),
+        buttonLabels: props.buttonLabels && Object.keys(props.buttonLabels).length !== 2 ? props.buttonLabels : (settings.buttonLabels || { query: '조회', reset: '초기화' }),
+        buttons: props.buttons && Object.keys(props.buttons).length ? props.buttons : (settings.buttons || {}),
+        id: props.id || settings.id
+    };
 });
 
 const emit = defineEmits(['update:field', 'query', 'reset']);
@@ -100,7 +135,8 @@ const emit = defineEmits(['update:field', 'query', 'reset']);
  * 정규화된 필드 목록 (기본값 적용)
  */
 const normalizedFields = computed(() => {
-  return props.fields.map(field => {
+  const fields = mergedSetting.value.fields || [];
+  return fields.map(field => {
     // 깊은 복사 또는 props 병합
     const defaultProps = {
       labelAlign: 'right' // 기본값: 오른쪽 정렬
@@ -114,6 +150,23 @@ const normalizedFields = computed(() => {
       }
     };
   });
+});
+
+/**
+ * 버튼 설정 정규화
+ */
+const resolvedButtons = computed(() => {
+    const defaults = {
+        query: { visible: true, disabled: false },
+        reset: { visible: true, disabled: false }
+    };
+
+    const userConfig = mergedSetting.value.buttons || {};
+
+    return {
+        query: { ...defaults.query, ...(userConfig.query || {}) },
+        reset: { ...defaults.reset, ...(userConfig.reset || {}) }
+    };
 });
 
 /**
@@ -144,7 +197,8 @@ const getDefaultValue = (field) => {
  * 필드 값 초기화
  */
 const initializeFieldValues = () => {
-  props.fields.forEach(field => {
+  const fields = mergedSetting.value.fields || [];
+  fields.forEach(field => {
     if (!(field.field in fieldValues)) {
       fieldValues[field.field] = getDefaultValue(field);
     }
@@ -163,7 +217,7 @@ const getFieldValues = () => {
  */
 const gridStyle = computed(() => ({
   display: 'grid',
-  gridTemplateColumns: `repeat(${props.columns}, 1fr)`,
+  gridTemplateColumns: `repeat(${mergedSetting.value.columns}, 1fr)`,
   gap: '10px',
   alignItems: 'end'
 }));
@@ -204,6 +258,13 @@ const handleUpdate = (field, value) => {
   
   // 외부로 이벤트 발생 (하위 호환성)
   emit('update:field', field.field, value);
+
+  // autoLoad 옵션이 있는 경우 자동 조회 (주로 ctv-select 등에서 사용)
+  if (field.autoLoad) {
+      nextTick(() => {
+          handleQuery();
+      });
+  }
 };
 
 /**
@@ -211,19 +272,19 @@ const handleUpdate = (field, value) => {
  */
 const handleQuery = () => {
   // target이 지정된 경우
-  if (props.target) {
-    const targetComponent = componentRegistry.get(props.target);
+  if (mergedSetting.value.target) {
+    const targetComponent = componentRegistry.get(mergedSetting.value.target);
     if (targetComponent?.query) {
       targetComponent.query();
     }
   }
   
-  // group이 지정된 경우
-  if (props.group) {
-    const groupComponents = componentRegistry.getByGroup(props.group);
-    groupComponents.forEach(comp => {
-      if (comp.query) comp.query();
-    });
+  // group이 지정된 경우 (활성 컴포넌트만 동작)
+  if (mergedSetting.value.group) {
+    const activeComp = componentRegistry.getActive(mergedSetting.value.group);
+    if (activeComp && activeComp.query) {
+        activeComp.query();
+    }
   }
   
   // 이벤트 발생
@@ -235,7 +296,8 @@ const handleQuery = () => {
  */
 const handleReset = () => {
   // 모든 필드를 초기값으로 리셋
-  props.fields.forEach(field => {
+  const fields = mergedSetting.value.fields || [];
+  fields.forEach(field => {
     const defaultValue = getDefaultValue(field);
     
     // 내부 상태 업데이트
@@ -246,19 +308,19 @@ const handleReset = () => {
   });
 
   // target이 지정된 경우
-  if (props.target) {
-    const targetComponent = componentRegistry.get(props.target);
+  if (mergedSetting.value.target) {
+    const targetComponent = componentRegistry.get(mergedSetting.value.target);
     if (targetComponent?.reset) {
       targetComponent.reset();
     }
   }
   
   // group이 지정된 경우
-  if (props.group) {
-    const groupComponents = componentRegistry.getByGroup(props.group);
-    groupComponents.forEach(comp => {
-      if (comp.reset) comp.reset();
-    });
+  if (mergedSetting.value.group) {
+    const activeComp = componentRegistry.getActive(mergedSetting.value.group);
+    if (activeComp && activeComp.reset) {
+        activeComp.reset();
+    }
   }
   
   // 이벤트 발생
@@ -268,17 +330,14 @@ const handleReset = () => {
 /**
  * 필드 변경 감지 및 초기화
  */
-watch(() => props.fields, () => {
+watch(() => mergedSetting.value.fields, () => {
   initializeFieldValues();
 }, { immediate: true, deep: true });
 
-/**
- * 컴포넌트 마운트 시 레지스트리 등록
- */
 onMounted(() => {
-  if (props.id) {
-    componentRegistry.register(props.id, {
-      group: props.group,
+  if (mergedSetting.value.id) {
+    componentRegistry.register(mergedSetting.value.id, {
+      group: mergedSetting.value.group,
       getFieldValues,
       reset: handleReset
     });
@@ -300,14 +359,13 @@ defineExpose({
   padding: 16px;
   background: #fff;
   border-radius: 4px;
-  margin-bottom: 16px;
   box-sizing: border-box;
 }
 
 .filter-container {
   display: flex;
   gap: 16px;
-  align-items: flex-end;
+  align-items: flex-start;
   width: 100%;
 }
 

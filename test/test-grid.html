@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CTV UI 테스트 페이지</title>
+    <title>CTV UI 테스트 - syncForm (Grid ↔ Form 동기화)</title>
 
     <!-- Element Plus CSS -->
     <link rel="stylesheet" href="https://unpkg.com/element-plus/dist/index.css">
@@ -42,22 +42,77 @@
         .vue-container {
             min-height: 600px;
         }
+
+        .form-section {
+            margin-top: 15px;
+            padding: 15px;
+            border: 1px solid #e4e7ed;
+            border-radius: 4px;
+            background: #fafafa;
+        }
+
+        .form-section h3 {
+            margin: 0 0 12px 0;
+            font-size: 14px;
+            color: #606266;
+            border-left: 3px solid #409eff;
+            padding-left: 8px;
+        }
+
+        .debug-section {
+            margin-top: 10px;
+            padding: 10px;
+            background: #f0f0f0;
+            border-radius: 4px;
+            font-size: 12px;
+            font-family: monospace;
+            color: #666;
+        }
     </style>
 </head>
 
 <body>
     <div class="container">
-        <h1>CTV UI 컴포넌트 테스트 - 그리드 예제</h1>
+        <h1>CTV UI - syncForm 테스트 (Grid ↔ Form 양방향 동기화)</h1>
 
         <div id="app" class="vue-container">
+            <!-- 필터 영역 -->
             <ctv-query-filter id="filter1" :columns="4" :fields="filterFields" target="grid1">
             </ctv-query-filter>
 
+            <!-- 툴박스 -->
             <ctv-tool-box target="grid1" :left="toolBoxConfig.left" :right="toolBoxConfig.right"></ctv-tool-box>
 
-            <ctv-data-grid id="grid1" title="프로그램등록" :grid-config="gridConfig" :query="query" :save="save"
-                :editable="true">
-            </ctv-data-grid>
+            <!-- 그리드 (setting 방식) -->
+            <ctv-data-grid :setting="masterGrid"></ctv-data-grid>
+
+            <!-- 폼 영역: 그리드 포커스 행과 양방향 동기화 -->
+            <div class="form-section">
+                <h3>상세 정보 (syncForm - 그리드 포커스행과 자동 동기화)</h3>
+                <ctv-form :model="form" :columns="2" label-width="130px">
+                    <ctv-form-item label="프로그램ID">
+                        <ctv-input field="ID_PGM" title="" :label-width="0" readonly />
+                    </ctv-form-item>
+                    <ctv-form-item label="프로그램명(한국어)">
+                        <ctv-input field="NM_KOR_PGM" title="" :label-width="0" />
+                    </ctv-form-item>
+                    <ctv-form-item label="프로그램명(영어)">
+                        <ctv-input field="NM_ENG_PGM" title="" :label-width="0" />
+                    </ctv-form-item>
+                    <ctv-form-item label="사용유무">
+                        <ctv-select v-model="form.YN_USE" title="" :label-width="0" :options="options.YN_USE" />
+                    </ctv-form-item>
+                    <ctv-form-item label="비고" style="grid-column: span 2;">
+                        <ctv-textarea field="BIGO" title="" :label-width="0" :rows="3" />
+                    </ctv-form-item>
+                </ctv-form>
+            </div>
+
+            <!-- 디버그 영역 -->
+            <div class="debug-section">
+                <strong>[Debug] form 상태:</strong>
+                {{ JSON.stringify(form, null, 2) }}
+            </div>
         </div>
     </div>
 
