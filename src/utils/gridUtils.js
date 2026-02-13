@@ -272,6 +272,7 @@ export function getEditableGridConfig(instance) {
         hideDeleted: true,
         editable: {
             immediateValidationCheck: true,
+            allowFocusOutInvalid: true,
         },
         copyable: {
             fill: true,

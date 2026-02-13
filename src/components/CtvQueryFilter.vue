@@ -2,22 +2,29 @@
   <div class="ctv-query-filter">
     <div class="filter-container">
       <!-- 필터 필드 영역 -->
-      <div class="filter-grid" :style="gridStyle">
-        <div 
-          v-for="(field, index) in normalizedFields" 
+      <ctv-form 
+        class="filter-form" 
+        :columns="mergedSetting.columns" 
+        :label-width="mergedSetting.labelWidth"
+        :label-position="mergedSetting.labelPosition"
+        :style="formStyle"
+      >
+        <ctv-form-item
+          v-for="(field, index) in normalizedFields"
           :key="index"
+          :label="field.props.title"
           :style="getFieldStyle(field)"
-          class="filter-field"
         >
           <component
             :is="field.component"
             v-bind="field.props"
+            :title="undefined" 
             :model-value="getModelValue(field)"
             @update:model-value="handleUpdate(field, $event)"
             @keyup.enter="handleQuery"
           />
-        </div>
-      </div>
+        </ctv-form-item>
+      </ctv-form>
       
       <!-- 버튼 영역 -->
       <div v-if="showButtons" class="button-group">
@@ -112,6 +119,14 @@ const props = defineProps({
     type: String,
     default: null
   },
+  labelWidth: {
+    type: [String, Number],
+    default: 'auto'
+  },
+  labelPosition: {
+    type: String,
+    default: 'right'
+  },
   setting: { type: Object, default: null }
 });
 
@@ -125,7 +140,9 @@ const mergedSetting = computed(() => {
         showButtons: props.showButtons !== true ? props.showButtons : (settings.showButtons !== undefined ? settings.showButtons : true),
         buttonLabels: props.buttonLabels && Object.keys(props.buttonLabels).length !== 2 ? props.buttonLabels : (settings.buttonLabels || { query: '조회', reset: '초기화' }),
         buttons: props.buttons && Object.keys(props.buttons).length ? props.buttons : (settings.buttons || {}),
-        id: props.id || settings.id
+        id: props.id || settings.id,
+        labelWidth: props.labelWidth !== 'auto' ? props.labelWidth : (settings.labelWidth || 'auto'),
+        labelPosition: props.labelPosition !== 'right' ? props.labelPosition : (settings.labelPosition || 'right')
     };
 });
 
@@ -213,13 +230,12 @@ const getFieldValues = () => {
 };
 
 /**
- * 그리드 스타일 계산
+ * 폼 스타일 계산
  */
-const gridStyle = computed(() => ({
-  display: 'grid',
-  gridTemplateColumns: `repeat(${mergedSetting.value.columns}, 1fr)`,
-  gap: '10px',
-  alignItems: 'end'
+const formStyle = computed(() => ({
+  flex: 1,
+  width: '100%',
+  alignItems: 'center' // Align items vertically in center
 }));
 
 /**
@@ -369,14 +385,7 @@ defineExpose({
   width: 100%;
 }
 
-.filter-grid {
-  flex: 1;
-  width: 100%;
-}
 
-.filter-field {
-  min-width: 0; /* 그리드 아이템이 오버플로우되지 않도록 */
-}
 
 .button-group {
   display: flex;
@@ -391,9 +400,7 @@ defineExpose({
     align-items: stretch;
   }
   
-  .filter-field {
-    grid-column: span 12 !important;
-  }
+
   
   .button-group {
     justify-content: flex-end;

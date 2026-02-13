@@ -4,15 +4,6 @@
     :style="wrapperStyle"
     :class="{ 'ctv-error': hasError }"
   >
-    <label 
-      v-if="title" 
-      class="ctv-label" 
-      :class="labelClasses"
-      :style="{ width: labelWidth + 'px' }"
-    >
-      {{ title }}
-    </label>
-    
     <div class="ctv-body">
       <el-date-picker
         v-model="innerValue"
@@ -86,14 +77,10 @@ const errorMessage = ref('');
 const hasError = computed(() => !!errorMessage.value);
 
 const wrapperStyle = computed(() => ({
-    display: 'flex',
-    alignItems: 'center',
+    width: '100%',
 }));
 
-const labelClasses = computed(() => ({
-    'is-required': props.required,
-    [`align-${props.labelAlign}`]: true
-}));
+
 </script>
 
 <style scoped>

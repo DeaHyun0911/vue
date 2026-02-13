@@ -12,4 +12,11 @@
 </script>
 
 <style scoped>
+:deep(.el-form-item__label) {
+  font-weight: 600;
+}
+
+.el-form-item {
+  margin-bottom: 0px;
+}
 </style>

@@ -1,13 +1,6 @@
 <template>
   <div class="ctv-switch-wrapper" :style="wrapperStyle">
-    <label 
-      v-if="title" 
-      class="ctv-label" 
-      :class="labelClasses"
-      :style="{ width: labelWidth + 'px' }"
-    >
-      {{ title }}
-    </label>
+
     <el-switch
       v-model="innerValue"
       :active-text="activeText"
@@ -44,14 +37,12 @@ const emit = defineEmits(['update:modelValue', 'change']);
 const { innerValue } = useFormField(props, emit);
 
 const wrapperStyle = computed(() => ({
-    display: 'flex',
-    alignItems: 'center',
+    // display: 'flex', // No longer needed
+    // alignItems: 'center',
     marginBottom: '5px'
 }));
 
-const labelClasses = computed(() => ({
-    [`align-${props.labelAlign}`]: true
-}));
+
 </script>
 
 <style scoped>

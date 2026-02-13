@@ -4,15 +4,6 @@
     :style="wrapperStyle"
     :class="{ 'ctv-error': hasError }"
   >
-    <label 
-      v-if="title" 
-      class="ctv-label" 
-      :class="labelClasses"
-      :style="{ width: labelWidth + 'px' }"
-    >
-      {{ title }}
-    </label>
-    
     <div class="ctv-body">
       <el-input
         ref="elInput"
@@ -23,7 +14,7 @@
         :readonly="readonly"
         :maxlength="maxlength"
         :minlength="minlength"
-        @focus="$emit('focus', $event)"
+        @focus="onFocus"
         @blur="onBlur"
         @change="$emit('change', $event)"
         @input="$emit('input', $event)"
@@ -43,7 +34,7 @@
 </template>
 
 <script setup>
-import { computed, ref, watch } from 'vue';
+import { computed, ref, watch, inject } from 'vue';
 
 const props = defineProps({
   modelValue: [String, Number],
@@ -67,10 +58,23 @@ const emit = defineEmits(['update:modelValue', 'change', 'input', 'blur', 'focus
 
 const { innerValue } = useFormField(props, emit);
 
+// 폼 포커스 상태 관리 (inject from CtvForm)
+const formFocusState = inject('formFocusState', null);
+
 const errorMessage = ref('');
 const hasError = computed(() => !!errorMessage.value);
 
+const onFocus = (e) => {
+  if (formFocusState) {
+    formFocusState.setFocus(true);
+  }
+  emit('focus', e);
+};
+
 const onBlur = (e) => {
+  if (formFocusState) {
+    formFocusState.setFocus(false);
+  }
   validate();
   emit('blur', e);
 };
@@ -86,14 +90,10 @@ const validate = () => {
 };
 
 const wrapperStyle = computed(() => ({
-    display: 'flex',
-    alignItems: 'center',
+    width: '100%',
 }));
 
-const labelClasses = computed(() => ({
-    'is-required': props.required,
-    [`align-${props.labelAlign}`]: true
-}));
+
 
 defineExpose({ validate });
 </script>

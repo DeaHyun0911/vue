@@ -18758,3 +18758,35 @@ input[type=checkbox].sbgrid-half::before {
 .sbgrid-scroll-label.sbgrid-hidden {
   display: none;
 }
+
+.sbgrid-grid .sbgrid-cell.sbgrid-text > input[type=text].sbgrid-view {
+  border: none;
+  outline: none;
+  background-color: transparent;
+  color: var(--text-color);
+  caret-color: transparent;
+  box-shadow: none;
+  text-align: center;
+  cursor: default;
+  width: 0;
+  height: 0;
+  position: absolute;
+  padding: 0;
+  min-height: 0;
+}
+
+.sbgrid-grid textarea.sbgrid-view {
+  border: none;
+  outline: none;
+  background-color: transparent;
+  color: var(--text-color);
+  caret-color: transparent;
+  box-shadow: none;
+  text-align: center;
+  cursor: default;
+  width: 0;
+  height: 0;
+  position: absolute;
+  padding: 0;
+  min-height: 0;
+}

@@ -39,9 +39,19 @@ const app = createApp({
                 ]
             },
 
+            // Form Model - 그리드와 양방향 동기화됨
+            formModel: {
+                CD_MST: '',
+                NM_CODE: '',
+                FG_SYS: '',
+                YN_USE: '',
+                BIGO: ''
+            },
+
             form: {
                 columns: 2,
-                labelWidth: '100px'
+                labelWidth: '100px',
+                labelPosition: 'top'
             },
 
             mainGrid: {
@@ -50,7 +60,7 @@ const app = createApp({
                 title: "Product List",
                 editable: true,
                 autoLoad: true,
-                focusData: {}, // Two-way binding target
+                focusRow: null, // 나중에 formModel로 설정됨
                 gridConfig: (gridState) => ({
                     columns: [
                         { field: 'CD_MST', caption: 'Product ID', colType: 'C|PK|STR', width: '100px', align: 'center' },
@@ -58,14 +68,16 @@ const app = createApp({
                         { field: 'FG_SYS', caption: 'Category', colType: 'C|STR', width: '100px', inputCombo: state.options.FG_SYS },
                         { field: 'YN_USE', caption: 'Active', colType: 'C|STR', width: '80px', inputCombo: state.options.YN_USE },
                         { field: 'BIGO', caption: 'Notes', colType: 'L|STR', width: '150px' }
-                    ],
-                    // No explicit rowChange needed for form sync, handled internally by CtvDataGrid via focusData binding
+                    ]
                 }),
                 query: {
                     path: "Test.ashx", funcNm: "UfnQueryCodeMaster", dataPath: 'rsData01'
                 }
             }
         });
+
+        // focusRow를 formModel로 연결 (양방향 바인딩)
+        state.mainGrid.focusRow = state.formModel;
 
         onMounted(async () => {
             await window.Ctv.setCombo(state.options, { FG_SYS: {}, YN_USE: {} });

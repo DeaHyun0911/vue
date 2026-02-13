@@ -57,8 +57,8 @@
                 style="background: #fff; padding: 20px; border: 1px solid var(--color-grid-border-2); overflow-y: auto; border-radius: 4px;">
                 <h4 style="margin-top:0;">Edit Selected Row</h4>
 
-                <!-- Bound to Grid's focusData -->
-                <ctv-form v-bind="form" :model="mainGrid.focusData">
+                <!-- Bound to formModel (양방향 동기화) -->
+                <ctv-form v-bind="form" :model="formModel">
                     <ctv-form-item label="Code ID">
                         <ctv-input field="CD_MST" disabled></ctv-input>
                     </ctv-form-item>
@@ -78,8 +78,8 @@
 
                 <div
                     style="margin-top: 20px; font-size: 12px; color: #666; background: #f8f9fa; padding: 10px; border-radius: 4px;">
-                    <strong>Live Data Sync:</strong>
-                    <pre>{{ mainGrid.focusData }}</pre>
+                    <strong>Live Data Sync (Grid ↔ Form):</strong>
+                    <pre>{{ formModel }}</pre>
                 </div>
             </div>
         </ctv-container>

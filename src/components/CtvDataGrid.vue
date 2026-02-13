@@ -144,8 +144,7 @@ const mergedSetting = computed(() => {
     group: props.group || settings.group || null,
     ready: props.ready !== undefined ? props.ready : (settings.ready !== undefined ? settings.ready : true),
     autoFocus: props.autoFocus !== undefined ? props.autoFocus : (settings.autoFocus !== undefined ? settings.autoFocus : true),
-    syncForm: settings.syncForm || null,
-    focusData: props.focusData || settings.focusData || null, // focusData 추가
+    focusRow: settings.focusRow || null, // 통합된 단일 동기화 대상
   };
 });
 
@@ -186,15 +185,13 @@ const setData = async (data) => {
   state.totalRows = gridData.length;
   state.isLoaded = true;
   state.selectedRowIdx = -1; // 데이터 로드 시 선택 초기화
-  state.selectedRowIdx = -1; // 데이터 로드 시 선택 초기화
-  state.focusData = {}; // 데이터 로드 시 포커스 데이터 초기화
-  
+
   // 데이터 로드 시 변경 상태 초기화
   hasChanges.value = false;
 
-  // 데이터가 비어있으면 syncForm 초기화
+  // 데이터가 비어있으면 focusRow 초기화
   if (gridData.length === 0) {
-    clearSyncForm();
+    clearFocusRow();
   }
 };
 
@@ -287,9 +284,6 @@ const state = reactive({
   totalRows: 0,
   selectedRowIdx: -1,
   isLoaded: false,
-  selectedRowIdx: -1,
-  isLoaded: false,
-  focusData: {}, // Initialize as empty object to prevent null access errors
   focusStatus: null, // 포커스된 행의 상태
 });
 
@@ -343,15 +337,18 @@ const createGrid = async () => {
 
   // 기존 그리드 파괴 (재생성 시)
   if (datagrid.grid && typeof SBGrid3.destroy === 'function') {
+    console.log(`[CtvDataGrid debug] Destroying existing grid: ${mergedSetting.value.id}`);
     SBGrid3.destroy(datagrid.grid);
     datagrid.grid = null;
     state.datagrid = null;
   }
 
-  // syncForm watcher 정리
-  if (syncFormWatcher) {
-    syncFormWatcher();
-    syncFormWatcher = null;
+  console.log(`[CtvDataGrid debug] Calling createGrid: ${mergedSetting.value.id}`);
+
+  // focusRow watcher 정리
+  if (focusRowWatcher) {
+    focusRowWatcher();
+    focusRowWatcher = null;
   }
 
   const gridConfig = computedGridConfig.value;
@@ -432,6 +429,7 @@ const createGrid = async () => {
     const originalFocus = finalConfig.doCommand?.focus;
 
     finalConfig.doCommand.focus = (grid, command) => {
+        console.log(`[CtvDataGrid debug] Grid Focus Event Triggered: ${mergedSetting.value.id}`, command);
         // 0. 활성 상태 처리
         handleActive();
 
@@ -454,13 +452,8 @@ const createGrid = async () => {
         // 3-1. 포커스된 행 상태 업데이트
         if (focusedRow) {
             state.focusStatus = focusedRow.status;
-            
-            // 3-2. 포커스된 행 데이터 전체 추출 (row object)
-            // mergedSetting.value.focusData가 있으면 동기화
-            updateFocusData(grid, focusedRow);
         } else {
             state.focusStatus = null;
-            state.focusData = {}; // Reset to empty object
         }
 
         // 4. 행 인덱스가 변경되었는지 확인
@@ -469,13 +462,12 @@ const createGrid = async () => {
 
         // 5. rowChange 이벤트 호출
         if (rowIndexChanged && value && originalRowChange && typeof originalRowChange === "function") {
-            // Vue 컴포넌트 이벤트 emit도 고려할 수 있으나, 기존 callback 방식 지원
             originalRowChange(grid, value);
         }
 
-        // 5-1. syncForm: Grid → Form (행 변경 시 폼 동기화 - 기존 방식 유지)
+        // 5-1. Grid → focusRow (행 변경 시 동기화)
         if (rowIndexChanged && focusedRow) {
-            syncRowToForm(grid, focusedRow);
+            updateFocusRow(grid, focusedRow);
         }
 
         // 6. 현재 행 인덱스 저장
@@ -503,9 +495,6 @@ const createGrid = async () => {
     // ===== 변경 감지 이벤트 등록 =====
     SBGrid3.setDoCommand(datagrid.grid, 'updated', (grid, command) => {
         updateChangeStatus();
-        // syncForm: 셀 값 편집 시 폼에 반영
-        const focusedRow = SBGrid3.getFocusedRow(grid);
-        if (focusedRow) syncRowToForm(grid, focusedRow);
     });
 
     SBGrid3.setDoCommand(datagrid.grid, 'add', (grid, command) => {
@@ -519,6 +508,18 @@ const createGrid = async () => {
     // ===== autoFocus 설정 (기본값 true) =====
     if (mergedSetting.value.autoFocus !== false) {
         SBGrid3.setDoCommand(datagrid.grid, 'loadedView', (grid) => {
+             // 현재 브라우저의 포커스가 그리드 외부에 있는 경우(예: 폼 입력 중) 포커스를 뺏지 않음
+             const isFocusInGrid = gridContainer.value?.contains(document.activeElement);
+             console.log(`[CtvDataGrid debug] loadedView - isLoaded: ${state.isLoaded}, isFocusInGrid: ${isFocusInGrid}, activeElement:`, document.activeElement);
+             
+             // 초기 로딩이거나 이미 그리드에 포커스가 있는 경우에만 moveFocus 수행
+             if (state.isLoaded && !isFocusInGrid && document.activeElement !== document.body) {
+                 console.log(`[CtvDataGrid debug] Skipping moveFocus to remain in form field`);
+                 return;
+             }
+
+             console.log(`[CtvDataGrid debug] Executing moveFocus (AutoFocus)`);
+
              const row = SBGrid3.getRowByIndex(grid, 0);
              if (!row) return;
 
@@ -546,11 +547,8 @@ const createGrid = async () => {
         });
     }
 
-    // ===== syncForm 동기화 설정 =====
-    setupSyncForm();
-
-    // ===== focusData 동기화 설정 =====
-    setupFocusDataSync();
+    // ===== focusRow 양방향 동기화 설정 =====
+    setupFocusRowSync();
 
 
     // ===== 동적 높이 설정 =====
@@ -667,7 +665,6 @@ const updateChangeStatus = () => {
   hasChanges.value = (
     sData.inserted.length > 0 || 
     sData.updated.length > 0 || 
-    sData.updated.length > 0 || 
     sData.deleted.length > 0
   );
 
@@ -736,143 +733,93 @@ const clearChanges = () => {
 };
 
 /**
- * syncForm: 그리드 ↔ 폼 자동 동기화
- * - Grid → Form: 포커스 행 변경 시 폼 상태 업데이트
- * - Form → Grid: 폼 값 변경 시 그리드 셀 업데이트
+ * focusRow: 그리드 ↔ Form 양방향 동기화 (통합 솔루션)
+ * - Grid → focusRow: 포커스 행 변경 시 focusRow 업데이트
+ * - focusRow → Grid: focusRow 값 변경 시 그리드 셀 업데이트
  */
-let syncFormWatcher = null;
-let isSyncingFromGrid = false;
+let focusRowWatcher = null;
+let isSyncing = false; // 단일 플래그로 무한루프 방지
+let isFormActive = false; // 폼이 활성 상태인지 추적 (폼 입력 중 그리드 업데이트 방지)
+let handleFormFocus = null; // 폼 포커스 이벤트 핸들러 (cleanup용)
 
-const syncRowToForm = (grid, rowItem) => {
-    const syncForm = mergedSetting.value.syncForm;
-    if (!syncForm || !syncForm.state) return;
+/**
+ * Grid → focusRow (포커스된 행 데이터를 focusRow에 복사)
+ */
+const updateFocusRow = (grid, rowItem) => {
+    const focusRow = mergedSetting.value.focusRow;
+    if (!focusRow || typeof focusRow !== 'object') return;
 
-    const formState = unref(syncForm.state);
-    if (!formState) return;
-
-    isSyncingFromGrid = true;
+    isSyncing = true;
     try {
-        if (syncForm.columns === 'all') {
-            const gridColumns = computedGridConfig.value?.columns || [];
-            const flatColumns = _flattenColumns(gridColumns);
-            flatColumns.forEach(col => {
-                if (col.field) {
-                    const val = SBGrid3.getValue(grid, rowItem, col.field);
-                    formState[col.field] = val !== undefined && val !== null ? val : '';
-                }
-            });
-        } else if (Array.isArray(syncForm.columns)) {
-            syncForm.columns.forEach(col => {
-                const val = SBGrid3.getValue(grid, rowItem, col);
-                formState[col] = val !== undefined && val !== null ? val : '';
-            });
-        }
-    } finally {
-        nextTick(() => { isSyncingFromGrid = false; });
-    }
-};
+        // 그리드의 모든 컬럼 값을 focusRow에 복사
+        const rowData = SBGrid3.getFocusedValue(grid);
+        if (!rowData) return;
 
-const clearSyncForm = () => {
-    const syncForm = mergedSetting.value.syncForm;
-    if (!syncForm || !syncForm.state) return;
-
-    const formState = unref(syncForm.state);
-    if (!formState) return;
-
-    isSyncingFromGrid = true;
-    try {
-        Object.keys(formState).forEach(key => {
-            formState[key] = '';
+        // focusRow 객체 초기화 후 값 할당
+        Object.keys(focusRow).forEach(key => {
+            focusRow[key] = '';
         });
+        Object.assign(focusRow, rowData);
+
+        console.log(`[CtvDataGrid] Grid → focusRow 동기화:`, mergedSetting.value.id, rowData);
     } finally {
-        nextTick(() => { isSyncingFromGrid = false; });
+        nextTick(() => { isSyncing = false; });
     }
-};
-
-const setupSyncForm = () => {
-    const syncForm = mergedSetting.value.syncForm;
-    if (!syncForm || !syncForm.state) return;
-
-    // 기존 watcher 정리
-    if (syncFormWatcher) {
-        syncFormWatcher();
-        syncFormWatcher = null;
-    }
-
-    // Form → Grid (폼 값 변경 시 그리드 셀 업데이트)
-    const stateSource = isRef(syncForm.state) ? syncForm.state : () => unref(syncForm.state);
-
-    syncFormWatcher = watch(stateSource, (newVal) => {
-        if (isSyncingFromGrid) return;
-        if (!datagrid.grid) return;
-
-        const focusRowKey = SBGrid3.getFocusedKey(datagrid.grid);
-        if (!focusRowKey) return;
-
-        const columns = syncForm.columns;
-        const keys = columns === 'all' ? Object.keys(newVal) : (Array.isArray(columns) ? columns : []);
-
-        keys.forEach(key => {
-                SBGrid3.setValue(datagrid.grid, focusRowKey, newVal[key], key);
-                console.log('syncForm', newVal[key], key);
-        });
-    }, { deep: true });
 };
 
 /**
- * focusData: 그리드 ↔ 외부 객체(Form Model) 양방향 동기화
+ * focusRow 초기화 (데이터 없을 때)
  */
-let focusDataWatcher = null;
-let isSyncingFromGridToFocusData = false;
+const clearFocusRow = () => {
+    const focusRow = mergedSetting.value.focusRow;
+    if (!focusRow || typeof focusRow !== 'object') return;
 
-// Grid → focusData
-const updateFocusData = (grid) => {
-    const rowData = SBGrid3.getFocusedValue(grid); 
-
-    if (!rowData) return;
-
-    Object.assign(state.focusData, rowData);
-
-    const externalFocusData = mergedSetting.value.focusData;
-    if (externalFocusData && typeof externalFocusData === 'object') {
-        isSyncingFromGridToFocusData = true;
-        try {
-            Object.assign(externalFocusData, rowData);
-        } finally {
-            nextTick(() => { isSyncingFromGridToFocusData = false; });
-        }
+    isSyncing = true;
+    try {
+        Object.keys(focusRow).forEach(key => {
+            focusRow[key] = '';
+        });
+    } finally {
+        nextTick(() => { isSyncing = false; });
     }
 };
 
-// focusData → Grid
-const setupFocusDataSync = () => {
-    const externalFocusData = mergedSetting.value.focusData;
-    
-    // focusData가 없거나 객체가 아니면 패스
-    if (!externalFocusData || typeof externalFocusData !== 'object') return;
+/**
+ * focusRow ↔ Grid 양방향 동기화 설정
+ */
+const setupFocusRowSync = () => {
+    const focusRow = mergedSetting.value.focusRow;
+    if (!focusRow || typeof focusRow !== 'object') return;
 
     // 기존 watcher 정리
-    if (focusDataWatcher) {
-        focusDataWatcher();
-        focusDataWatcher = null;
+    if (focusRowWatcher) {
+        focusRowWatcher();
+        focusRowWatcher = null;
     }
 
-    // Vue 3의 watch는 reactive 객체를 바로 감시 가능
-    // deep: true는 객체 내부 변경 감지
-    focusDataWatcher = watch(() => externalFocusData, (newVal) => {
-        if (isSyncingFromGridToFocusData) return;
-        if (!datagrid.grid) return;
+    // focusRow → Grid (Form 값 변경 시 그리드 셀 업데이트)
+    focusRowWatcher = watch(() => focusRow, (newVal) => {
+        if (isSyncing || !datagrid.grid || isFormActive) return;
 
-        const focusRowKey = SBGrid3.getFocusedKey(datagrid.grid);
-        if (!focusRowKey) return;
+        const focusedRow = SBGrid3.getFocusedRow(datagrid.grid);
+        if (!focusedRow) return;
 
-        // 변경된 값만 그리드에 반영
-        Object.keys(newVal).forEach(key => {
-            const gridVal = SBGrid3.getValue(datagrid.grid, focusRowKey, key);
-            if (gridVal !== newVal[key]) {
-                SBGrid3.setValue(datagrid.grid, focusRowKey, newVal[key], key);
-            }
-        });
+        console.log(`[CtvDataGrid] focusRow → Grid 동기화:`, mergedSetting.value.id);
+
+        isSyncing = true;
+        try {
+            Object.keys(newVal).forEach(key => {
+                const currentGridVal = SBGrid3.getValue(datagrid.grid, focusedRow, key);
+                const newValStr = String(newVal[key] ?? '');
+                const currentValStr = String(currentGridVal ?? '');
+
+                if (currentValStr !== newValStr) {
+                    SBGrid3.setRowValue(datagrid.grid, key, newVal[key], focusedRow._rowIndex);
+                }
+            });
+        } finally {
+            nextTick(() => { isSyncing = false; });
+        }
     }, { deep: true });
 };
 
@@ -1097,14 +1044,13 @@ const reset = async () => {
 
 // ready prop 변경 감지 생략 (이제 computedGridConfig가 담당)
 
-// Watch configuration changes to rebuild grid
-watch(computedGridConfig, async (newVal, oldVal) => {
-  // Deep comparison or just assume change if reference changed?
-  // computed returns new object from gridConfig() function usually.
-  if (newVal) {
-     await createGrid();
+// Watch configuration changes to rebuild grid (Only for initial creation)
+watch(computedGridConfig, async (newVal) => {
+  console.log(`[CtvDataGrid debug] watch computedGridConfig - grid exists: ${!!datagrid.grid}`);
+  if (newVal && !datagrid.grid) {
+      await createGrid();
   }
-}, { deep: true }); // computed value might need deep watch if it returns same object reference but mutated internals? No, typical usage returns new object. But computed tracks dependencies.
+}, { immediate: true });
 
 // 활성 상태 관리
 const isActive = ref(false);
@@ -1173,11 +1119,20 @@ const handleActive = async () => {
 };
 
 onMounted(async () => {
-  // Initial creation if config is ready
-  if (computedGridConfig.value) {
-      await createGrid();
+  // 폼 포커스 이벤트 리스너 추가 (그리드 동기화 제어)
+  handleFormFocus = (e) => {
+    const { focused, formModel } = e.detail;
+    // 현재 그리드의 focusRow와 같은 모델인 경우에만 플래그 설정
+    if (formModel === mergedSetting.value.focusRow) {
+      isFormActive = focused;
+      console.log(`[CtvDataGrid] Form focus ${focused ? 'gained' : 'lost'}, grid sync ${focused ? 'paused' : 'resumed'}`);
+    }
+  };
+
+  if (typeof window !== 'undefined') {
+    window.addEventListener('ctv-form-focus', handleFormFocus);
   }
-  
+
   // 컴포넌트 레지스트리에 등록
   if (mergedSetting.value.id) {
     componentRegistry.register(mergedSetting.value.id, {
@@ -1194,12 +1149,11 @@ onMounted(async () => {
       get isLoaded() { return state.isLoaded; },
       get totalRows() { return state.totalRows; },
       get selectedRowIdx() { return state.selectedRowIdx; },
-      get focusData() { return state.focusData; },
       get focusStatus() { return state.focusStatus; },
       // active state helper
-      setActive: (active) => { isActive.value = active; }  
+      setActive: (active) => { isActive.value = active; }
     });
-    
+
     // 전역 window 객체에 그리드 인스턴스 노출 (레거시/외부 접근용)
     if (mergedSetting.value.id) {
         window[mergedSetting.value.id] = componentRegistry.get(mergedSetting.value.id);
@@ -1230,16 +1184,16 @@ onMounted(async () => {
 });
 
 onBeforeUnmount(() => {
-  // syncForm watcher 정리
-  if (syncFormWatcher) {
-    syncFormWatcher();
-    syncFormWatcher = null;
+  // focusRow watcher 정리
+  if (focusRowWatcher) {
+    focusRowWatcher();
+    focusRowWatcher = null;
   }
 
-  // focusData watcher 정리
-  if (focusDataWatcher) {
-    focusDataWatcher();
-    focusDataWatcher = null;
+  // 폼 포커스 이벤트 리스너 제거
+  if (handleFormFocus && typeof window !== 'undefined') {
+    window.removeEventListener('ctv-form-focus', handleFormFocus);
+    handleFormFocus = null;
   }
 
   // 컴포넌트 레지스트리에서 제거
@@ -1250,7 +1204,7 @@ onBeforeUnmount(() => {
         delete window[props.id];
     }
   }
-  
+
   // ResizeObserver 정리
   if (resizeObserver) {
     resizeObserver.disconnect();

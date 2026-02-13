@@ -9,7 +9,8 @@
       :model="model"
       class="ctv-form"
       :class="[`columns-${columns}`]"
-      :label-width="labelWidth"
+      :label-width="effectiveLabelWidth"
+      :label-position="labelPosition"
       :style="gridStyle"
     >
       <slot />
@@ -36,11 +37,31 @@ const props = defineProps({
   labelWidth: {
     type: [String, Number],
     default: '120px' 
+  },
+  labelPosition: {
+    type: String,
+    default: 'right',
+    validator: (value) => ['left', 'right', 'top'].includes(value)
   }
 });
 
-import { provide, toRef } from 'vue';
+import { provide, toRef, reactive } from 'vue';
 provide('formModel', toRef(props, 'model'));
+
+// 폼 포커스 상태 관리 (그리드 동기화 제어용)
+const formFocusState = reactive({
+  hasFocus: false,
+  setFocus: (focused) => {
+    formFocusState.hasFocus = focused;
+    // 전역 이벤트로 폼 포커스 상태 브로드캐스트
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('ctv-form-focus', {
+        detail: { focused, formModel: props.model }
+      }));
+    }
+  }
+});
+provide('formFocusState', formFocusState);
 
 const formRef = ref(null);
 
@@ -50,8 +71,14 @@ const gridStyle = computed(() => {
   return {
     display: 'grid',
     gridTemplateColumns: `repeat(${cols}, 1fr)`,
-    gap: '0px 20px', // row-gap handled by form-item margin
+    gap: '15px 20px', // row-gap handled by form-item margin
   };
+});
+
+// Handle label-width for top position
+const effectiveLabelWidth = computed(() => {
+  if (props.labelPosition === 'top') return 'auto';
+  return props.labelWidth;
 });
 
 // Expose Element Plus Form methods transparently

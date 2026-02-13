@@ -4,15 +4,6 @@
     :style="wrapperStyle"
     :class="{ 'ctv-error': hasError }"
   >
-    <label 
-      v-if="title" 
-      class="ctv-label" 
-      :class="labelClasses"
-      :style="labelStyle"
-    >
-      {{ title }}
-    </label>
-    
     <div class="ctv-body" :style="{ width: '100%' }">
       <el-input
         ref="elInput"
@@ -27,7 +18,7 @@
         :autosize="autosize"
         :resize="resize"
         :input-style="{ minHeight: minHeight }"
-        @focus="$emit('focus', $event)"
+        @focus="onFocus"
         @blur="onBlur"
         @change="$emit('change', $event)"
         @input="$emit('input', $event)"
@@ -40,7 +31,7 @@
 </template>
 
 <script setup>
-import { computed, ref } from 'vue';
+import { computed, ref, inject } from 'vue';
 
 const props = defineProps({
   modelValue: [String, Number],
@@ -67,10 +58,23 @@ const emit = defineEmits(['update:modelValue', 'change', 'input', 'blur', 'focus
 
 const { innerValue } = useFormField(props, emit);
 
+// 폼 포커스 상태 관리 (inject from CtvForm)
+const formFocusState = inject('formFocusState', null);
+
 const errorMessage = ref('');
 const hasError = computed(() => !!errorMessage.value);
 
+const onFocus = (e) => {
+  if (formFocusState) {
+    formFocusState.setFocus(true);
+  }
+  emit('focus', e);
+};
+
 const onBlur = (e) => {
+  if (formFocusState) {
+    formFocusState.setFocus(false);
+  }
   validate();
   emit('blur', e);
 };
@@ -85,50 +89,15 @@ const validate = () => {
 };
 
 const wrapperStyle = computed(() => ({
-    display: 'flex',
-    flexDirection: props.labelPosition === 'top' ? 'column' : 'row',
-    alignItems: props.labelPosition === 'top' ? 'stretch' : 'flex-start',
     width: '100%'
-}));
-
-const labelStyle = computed(() => {
-    if (props.labelPosition === 'top') {
-        return {
-            width: '100%',
-            textAlign: 'left',
-            marginBottom: '5px'
-        };
-    }
-    return {
-        width: props.labelWidth + 'px',
-        alignSelf: 'flex-start',
-        marginTop: '5px'
-    };
-});
-
-const labelClasses = computed(() => ({
-    'is-required': props.required,
-    [`align-${props.labelAlign}`]: true
 }));
 
 defineExpose({ validate });
 </script>
 
 <style scoped>
-.ctv-wrapper {
-  margin-bottom: 5px;
-}
-.ctv-label {
-  font-weight: bold;
-  margin-right: 10px;
-  text-align: right;
-  font-size: 13px;
-  color: #606266;
-}
-.ctv-label.align-left { text-align: left; }
-.ctv-label.align-center { text-align: center; }
 .ctv-body {
-  flex: 1;
+  width: 100%;
 }
 .ctv-error-msg {
   color: #f56c6c;
