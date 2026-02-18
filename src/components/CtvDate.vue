@@ -15,7 +15,8 @@
         :value-format="valueFormat"
         :disabled="disabled"
         :readonly="readonly"
-        @change="$emit('change', $event)"
+        @change="handleChange"
+        @blur="handleBlur"
         style="width: 100%"
         v-bind="$attrs"
       />
@@ -63,7 +64,7 @@ const activeFormat = computed(() => props.format || defaultFormat.value);
 const activeValueFormat = computed(() => props.valueFormat || defaultFormat.value);
 
 // Use form field composable
-const { innerValue: formValue } = useFormField(props, emit);
+const { innerValue: formValue, onFormFieldBlur } = useFormField(props, emit);
 
 // Proxy innerValue to handle range types vs single value
 const innerValue = computed({
@@ -80,6 +81,14 @@ const wrapperStyle = computed(() => ({
     width: '100%',
 }));
 
+const handleChange = (val) => {
+  emit('change', val);
+};
+
+const handleBlur = () => {
+  // 그리드 동기화를 위한 공통 blur 이벤트 발생
+  onFormFieldBlur();
+};
 
 </script>
 

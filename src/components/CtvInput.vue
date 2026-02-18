@@ -34,7 +34,7 @@
 </template>
 
 <script setup>
-import { computed, ref, watch, inject } from 'vue';
+import { computed, ref, inject } from 'vue';
 
 const props = defineProps({
   modelValue: [String, Number],
@@ -56,7 +56,7 @@ import { useFormField } from '../composables/useFormField';
 
 const emit = defineEmits(['update:modelValue', 'change', 'input', 'blur', 'focus']);
 
-const { innerValue } = useFormField(props, emit);
+const { innerValue, onFormFieldBlur } = useFormField(props, emit);
 
 // 폼 포커스 상태 관리 (inject from CtvForm)
 const formFocusState = inject('formFocusState', null);
@@ -77,6 +77,9 @@ const onBlur = (e) => {
   }
   validate();
   emit('blur', e);
+
+  // 그리드 동기화를 위한 공통 blur 이벤트 발생
+  onFormFieldBlur();
 };
 
 const validate = () => {

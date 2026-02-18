@@ -18,7 +18,7 @@
         popper-class="clean-dropdown"
         @focus="onFocus"
         @blur="onBlur"
-        @change="$emit('change', $event)"
+        @change="handleChange"
         style="width: 100%; box-sizing: border-box;"
         v-bind="$attrs"
       >
@@ -65,7 +65,7 @@ import { useFormField } from '../composables/useFormField';
 
 const emit = defineEmits(['update:modelValue', 'change', 'blur', 'focus']);
 
-const { innerValue } = useFormField(props, emit);
+const { innerValue, onFormFieldBlur } = useFormField(props, emit);
 
 // 폼 포커스 상태 관리 (inject from CtvForm)
 const formFocusState = inject('formFocusState', null);
@@ -86,6 +86,12 @@ const onBlur = (e) => {
   }
   validate();
   emit('blur', e);
+};
+
+const handleChange = (val) => {
+  emit('change', val);
+  // 그리드 동기화를 위한 공통 이벤트 발생 (셀렉트는 change 즉시 동기화)
+  onFormFieldBlur();
 };
 
 const validate = () => {

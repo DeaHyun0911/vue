@@ -739,8 +739,7 @@ const clearChanges = () => {
  */
 let focusRowWatcher = null;
 let isSyncing = false; // 단일 플래그로 무한루프 방지
-let isFormActive = false; // 폼이 활성 상태인지 추적 (폼 입력 중 그리드 업데이트 방지)
-let handleFormFocus = null; // 폼 포커스 이벤트 핸들러 (cleanup용)
+let handleFormFieldBlur = null; // 폼 필드 blur 이벤트 핸들러 (cleanup용)
 
 /**
  * Grid → focusRow (포커스된 행 데이터를 focusRow에 복사)
@@ -751,15 +750,15 @@ const updateFocusRow = (grid, rowItem) => {
 
     isSyncing = true;
     try {
-        // 그리드의 모든 컬럼 값을 focusRow에 복사
         const rowData = SBGrid3.getFocusedValue(grid);
         if (!rowData) return;
 
-        // focusRow 객체 초기화 후 값 할당
         Object.keys(focusRow).forEach(key => {
-            focusRow[key] = '';
-        });
-        Object.assign(focusRow, rowData);
+            const newVal = rowData[key] !== undefined && rowData[key] !== null ? rowData[key] : '';
+            if (focusRow[key] !== newVal) {
+                focusRow[key] = newVal;
+            }
+        })
 
         console.log(`[CtvDataGrid] Grid → focusRow 동기화:`, mergedSetting.value.id, rowData);
     } finally {
@@ -777,7 +776,38 @@ const clearFocusRow = () => {
     isSyncing = true;
     try {
         Object.keys(focusRow).forEach(key => {
-            focusRow[key] = '';
+            if (focusRow[key] !== '') {
+                focusRow[key] = '';
+            }
+        });
+    } finally {
+        nextTick(() => { isSyncing = false; });
+    }
+};
+
+/**
+ * focusRow → Grid 수동 동기화 (필드 blur 시 호출)
+ */
+const syncFormToGrid = () => {
+    const focusRow = mergedSetting.value.focusRow;
+    if (isSyncing || !datagrid.grid || !focusRow) return;
+
+    const focusedRow = SBGrid3.getFocusedRow(datagrid.grid);
+    const focusedKey = SBGrid3.getFocusedKey(datagrid.grid);
+    if (!focusedRow) return;
+
+    console.log(`[CtvDataGrid] Form → Grid 동기화 (blur):`, mergedSetting.value.id);
+
+    isSyncing = true;
+    try {
+        Object.keys(focusRow).forEach(key => {
+            const currentGridVal = SBGrid3.getValue(datagrid.grid, focusedKey, key);
+            const newValStr = String(focusRow[key] ?? '');
+            const currentValStr = String(currentGridVal ?? '');
+
+            if (currentValStr !== newValStr) {
+                SBGrid3.setRowValue(datagrid.grid, key, focusRow[key], focusedRow._rowIndex);
+            }
         });
     } finally {
         nextTick(() => { isSyncing = false; });
@@ -788,39 +818,8 @@ const clearFocusRow = () => {
  * focusRow ↔ Grid 양방향 동기화 설정
  */
 const setupFocusRowSync = () => {
-    const focusRow = mergedSetting.value.focusRow;
-    if (!focusRow || typeof focusRow !== 'object') return;
-
-    // 기존 watcher 정리
-    if (focusRowWatcher) {
-        focusRowWatcher();
-        focusRowWatcher = null;
-    }
-
-    // focusRow → Grid (Form 값 변경 시 그리드 셀 업데이트)
-    focusRowWatcher = watch(() => focusRow, (newVal) => {
-        if (isSyncing || !datagrid.grid || isFormActive) return;
-
-        const focusedRow = SBGrid3.getFocusedRow(datagrid.grid);
-        if (!focusedRow) return;
-
-        console.log(`[CtvDataGrid] focusRow → Grid 동기화:`, mergedSetting.value.id);
-
-        isSyncing = true;
-        try {
-            Object.keys(newVal).forEach(key => {
-                const currentGridVal = SBGrid3.getValue(datagrid.grid, focusedRow, key);
-                const newValStr = String(newVal[key] ?? '');
-                const currentValStr = String(currentGridVal ?? '');
-
-                if (currentValStr !== newValStr) {
-                    SBGrid3.setRowValue(datagrid.grid, key, newVal[key], focusedRow._rowIndex);
-                }
-            });
-        } finally {
-            nextTick(() => { isSyncing = false; });
-        }
-    }, { deep: true });
+    // watch 제거: 실시간 동기화 대신 blur 이벤트 기반으로 동작
+    // syncFormToGrid는 필드 blur 시 수동 호출됨
 };
 
 /**
@@ -1119,18 +1118,18 @@ const handleActive = async () => {
 };
 
 onMounted(async () => {
-  // 폼 포커스 이벤트 리스너 추가 (그리드 동기화 제어)
-  handleFormFocus = (e) => {
-    const { focused, formModel } = e.detail;
-    // 현재 그리드의 focusRow와 같은 모델인 경우에만 플래그 설정
+  // 폼 필드 blur 이벤트 리스너 추가 (필드 입력 완료 시 그리드 동기화)
+  handleFormFieldBlur = (e) => {
+    const { formModel } = e.detail;
+    // 현재 그리드의 focusRow와 같은 모델인 경우에만 동기화
     if (formModel === mergedSetting.value.focusRow) {
-      isFormActive = focused;
-      console.log(`[CtvDataGrid] Form focus ${focused ? 'gained' : 'lost'}, grid sync ${focused ? 'paused' : 'resumed'}`);
+      console.log(`[CtvDataGrid] Form field blur detected, syncing to grid:`, mergedSetting.value.id);
+      syncFormToGrid();
     }
   };
 
   if (typeof window !== 'undefined') {
-    window.addEventListener('ctv-form-focus', handleFormFocus);
+    window.addEventListener('ctv-form-field-blur', handleFormFieldBlur);
   }
 
   // 컴포넌트 레지스트리에 등록
@@ -1190,10 +1189,10 @@ onBeforeUnmount(() => {
     focusRowWatcher = null;
   }
 
-  // 폼 포커스 이벤트 리스너 제거
-  if (handleFormFocus && typeof window !== 'undefined') {
-    window.removeEventListener('ctv-form-focus', handleFormFocus);
-    handleFormFocus = null;
+  // 폼 필드 blur 이벤트 리스너 제거
+  if (handleFormFieldBlur && typeof window !== 'undefined') {
+    window.removeEventListener('ctv-form-field-blur', handleFormFieldBlur);
+    handleFormFieldBlur = null;
   }
 
   // 컴포넌트 레지스트리에서 제거

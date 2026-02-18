@@ -1,6 +1,7 @@
 import { createApp } from 'vue';
 import ElementPlus from 'element-plus';
 import 'element-plus/dist/index.css';
+import { ko } from 'element-plus/es/locales.mjs';
 import * as ElementPlusIconsVue from '@element-plus/icons-vue';
 import * as Components from './components/index.js';
 
@@ -12,7 +13,7 @@ import componentRegistry from './utils/componentRegistry.js';
 
 const install = (app) => {
     // Register Element Plus
-    app.use(ElementPlus);
+    app.use(ElementPlus, { locale: ko });
 
     // Register Element Plus Icons
     for (const [key, component] of Object.entries(ElementPlusIconsVue)) {

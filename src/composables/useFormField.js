@@ -21,7 +21,23 @@ export function useFormField(props, emit) {
         }
     });
 
+    /**
+     * 폼 필드 blur 이벤트 핸들러 (그리드 동기화용)
+     * 모든 폼 컴포넌트에서 blur 시 호출하여 그리드와 동기화
+     */
+    const onFormFieldBlur = () => {
+        if (typeof window !== 'undefined' && formModel) {
+            window.dispatchEvent(new CustomEvent('ctv-form-field-blur', {
+                detail: {
+                    formModel: formModel.value,
+                    field: props.field
+                }
+            }));
+        }
+    };
+
     return {
-        innerValue
+        innerValue,
+        onFormFieldBlur
     };
 }

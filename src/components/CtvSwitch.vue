@@ -8,7 +8,7 @@
       :active-value="activeValue"
       :inactive-value="inactiveValue"
       :disabled="disabled"
-      @change="$emit('change', $event)"
+      @change="handleChange"
       v-bind="$attrs"
     />
   </div>
@@ -34,7 +34,7 @@ import { useFormField } from '../composables/useFormField';
 
 const emit = defineEmits(['update:modelValue', 'change']);
 
-const { innerValue } = useFormField(props, emit);
+const { innerValue, onFormFieldBlur } = useFormField(props, emit);
 
 const wrapperStyle = computed(() => ({
     // display: 'flex', // No longer needed
@@ -42,6 +42,11 @@ const wrapperStyle = computed(() => ({
     marginBottom: '5px'
 }));
 
+const handleChange = (val) => {
+  emit('change', val);
+  // 그리드 동기화를 위한 공통 이벤트 발생 (스위치는 change 즉시 동기화)
+  onFormFieldBlur();
+};
 
 </script>
 

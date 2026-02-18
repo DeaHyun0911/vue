@@ -63,7 +63,7 @@ const app = createApp({
                 focusRow: null, // 나중에 formModel로 설정됨
                 gridConfig: (gridState) => ({
                     columns: [
-                        { field: 'CD_MST', caption: 'Product ID', colType: 'C|PK|STR', width: '100px', align: 'center' },
+                        { field: 'CD_MST', caption: 'Product ID', colType: 'C|PK|STR', width: '100px', align: 'center', lockType: 'INSERT_ONLY' },
                         { field: 'NM_CODE', caption: 'Product Name', colType: 'L|STR', width: '200px' },
                         { field: 'FG_SYS', caption: 'Category', colType: 'C|STR', width: '100px', inputCombo: state.options.FG_SYS },
                         { field: 'YN_USE', caption: 'Active', colType: 'C|STR', width: '80px', inputCombo: state.options.YN_USE },
