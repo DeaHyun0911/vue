@@ -2134,19 +2134,28 @@ ol {
 }
 
 .el-date-range-picker {
-    width: 450px;
+    width: 520px;
 }
 
 .el-date-picker {
     width: 260px;
 }
 
-.el-date-picker__header-label {
+.el-date-picker__header-label,
+.el-date-range-picker__header-label,
+.el-date-range-picker__header div {
     font-size: 13px;
 }
 
+
+
 .el-date-table {
     font-size: 11px;
+}
+
+.el-month-table td,
+.el-year-table td {
+    width: auto;
 }
 
 .el-picker-panel__content {
@@ -2164,4 +2173,8 @@ ol {
 .el-tabs--bottom>.el-tabs__header .el-tabs__item:nth-child(2),
 .el-tabs--top>.el-tabs__header .el-tabs__item:nth-child(2) {
     padding-left: 20px;
+}
+
+.el-input__inner {
+    text-align: center;
 }
