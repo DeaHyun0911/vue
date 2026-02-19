@@ -2,15 +2,15 @@
   <div 
     class="ctv-data-grid" 
     :class="{ 'is-active': isActive }"
-    @click="handleActive"
+    @click="handleGridClick"
   >
     <div ref="gridContainer"></div>
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, onBeforeUnmount, watch, markRaw, nextTick, unref, isRef } from 'vue';
-import { ElMessageBox, ElLoading } from 'element-plus';
+import { ref, reactive, computed, onMounted, onBeforeUnmount, watch, markRaw, nextTick, unref, isRef, h } from 'vue';
+import { ElMessageBox, ElLoading, ElTable, ElTableColumn } from 'element-plus';
 import { 
   getDefaultGridConfig, 
   getEditableGridConfig,
@@ -18,6 +18,7 @@ import {
   applyLockTypeToColumns,
   applyDefaultUnitToColumns
 } from '../utils/gridUtils.js';
+import { activeGridId } from '../utils/common.js';
 import componentRegistry from '../utils/componentRegistry.js';
 
 const props = defineProps({
@@ -144,7 +145,8 @@ const mergedSetting = computed(() => {
     group: props.group || settings.group || null,
     ready: props.ready !== undefined ? props.ready : (settings.ready !== undefined ? settings.ready : true),
     autoFocus: props.autoFocus !== undefined ? props.autoFocus : (settings.autoFocus !== undefined ? settings.autoFocus : true),
-    focusRow: settings.focusRow || null, // 통합된 단일 동기화 대상
+    // focusRow -> focusData 명칭 통일
+    focusData: settings.focusData || settings.focusRow || null, // 통합된 단일 동기화 대상
   };
 });
 
@@ -191,7 +193,7 @@ const setData = async (data) => {
 
   // 데이터가 비어있으면 focusRow 초기화
   if (gridData.length === 0) {
-    clearFocusRow();
+    clearFocusData();
   }
 };
 
@@ -285,6 +287,7 @@ const state = reactive({
   selectedRowIdx: -1,
   isLoaded: false,
   focusStatus: null, // 포커스된 행의 상태
+  focusData: null,
 });
 
 /**
@@ -337,19 +340,13 @@ const createGrid = async () => {
 
   // 기존 그리드 파괴 (재생성 시)
   if (datagrid.grid && typeof SBGrid3.destroy === 'function') {
-    console.log(`[CtvDataGrid debug] Destroying existing grid: ${mergedSetting.value.id}`);
     SBGrid3.destroy(datagrid.grid);
     datagrid.grid = null;
     state.datagrid = null;
   }
 
-  console.log(`[CtvDataGrid debug] Calling createGrid: ${mergedSetting.value.id}`);
-
-  // focusRow watcher 정리
-  if (focusRowWatcher) {
-    focusRowWatcher();
-    focusRowWatcher = null;
-  }
+  // focusData watcher 관련 로직 (필요시)
+  // if (focusDataWatcher) ...
 
   const gridConfig = computedGridConfig.value;
   if (!gridConfig) return;
@@ -389,7 +386,7 @@ const createGrid = async () => {
     finalConfig.container = gridContainer.value;
 
     // ===== 기본 설정 병합 =====
-    const defaultConfig = getDefaultGridConfig();
+    const defaultConfig = getDefaultGridConfig({ showRowDetailModal });
     SBGrid3.setGridDefault(defaultConfig);
 
     // excelExport 설정
@@ -405,7 +402,7 @@ const createGrid = async () => {
     // Since we are inside the same scope, I can reuse previous logic but need to ensure it uses finalConfig
     
     if (mergedSetting.value.editable !== false) {
-      const editableConfig = getEditableGridConfig();
+      const editableConfig = getEditableGridConfig({ showRowDetailModal, pasteClipboardData });
 
       if (finalConfig.showStatus === undefined) finalConfig.showStatus = editableConfig.showStatus;
       if (finalConfig.navigatable === undefined) finalConfig.navigatable = editableConfig.navigatable;
@@ -429,9 +426,11 @@ const createGrid = async () => {
     const originalFocus = finalConfig.doCommand?.focus;
 
     finalConfig.doCommand.focus = (grid, command) => {
-        console.log(`[CtvDataGrid debug] Grid Focus Event Triggered: ${mergedSetting.value.id}`, command);
-        // 0. 활성 상태 처리
-        handleActive();
+        
+        // 전역 activeGridId 업데이트 (포커스된 그리드 ID 저장)
+        if (props.id) {
+            activeGridId.value = props.id;
+        }
 
         // 사용자 정의 focus 핸들러 호출
         if (originalFocus) originalFocus(grid, command);
@@ -447,7 +446,7 @@ const createGrid = async () => {
         
         // 3. 포커스된 값 가져오기 (셀 값)
         const value = SBGrid3.getFocusedValue(grid);
-        // state.focusData = value; // 기존: 단일 셀 값 (제거)
+        state.focusData = value;
 
         // 3-1. 포커스된 행 상태 업데이트
         if (focusedRow) {
@@ -465,9 +464,9 @@ const createGrid = async () => {
             originalRowChange(grid, value);
         }
 
-        // 5-1. Grid → focusRow (행 변경 시 동기화)
+        // 5-1. Grid → focusData (행 변경 시 동기화)
         if (rowIndexChanged && focusedRow) {
-            updateFocusRow(grid, focusedRow);
+            updateFocusData(grid, focusedRow);
         }
 
         // 6. 현재 행 인덱스 저장
@@ -475,7 +474,6 @@ const createGrid = async () => {
         state.selectedRowIdx = currentRowIndex !== null ? currentRowIndex : -1;
 
         // 7. 원래 focus 이벤트 호출
-        // value 유효성 체크는 상황에 따라 다를 수 있으나 원본 로직 따름
         if (value && originalFocus && typeof originalFocus === "function") {
             originalFocus(grid, value);
         }
@@ -497,6 +495,15 @@ const createGrid = async () => {
         updateChangeStatus();
     });
 
+    // 그리드 클릭 시 활성 그리드 ID 업데이트 (행 포커스 여부와 무관하게 동작)
+    SBGrid3.setDoCommand(datagrid.grid, 'event', (grid, command) => {
+      if(command.event.type === 'click') {
+        if (props.id) {
+            activeGridId.value = props.id;
+        }
+      }
+    });
+
     SBGrid3.setDoCommand(datagrid.grid, 'add', (grid, command) => {
         updateChangeStatus();
     });
@@ -510,15 +517,13 @@ const createGrid = async () => {
         SBGrid3.setDoCommand(datagrid.grid, 'loadedView', (grid) => {
              // 현재 브라우저의 포커스가 그리드 외부에 있는 경우(예: 폼 입력 중) 포커스를 뺏지 않음
              const isFocusInGrid = gridContainer.value?.contains(document.activeElement);
-             console.log(`[CtvDataGrid debug] loadedView - isLoaded: ${state.isLoaded}, isFocusInGrid: ${isFocusInGrid}, activeElement:`, document.activeElement);
-             
-             // 초기 로딩이거나 이미 그리드에 포커스가 있는 경우에만 moveFocus 수행
-             if (state.isLoaded && !isFocusInGrid && document.activeElement !== document.body) {
-                 console.log(`[CtvDataGrid debug] Skipping moveFocus to remain in form field`);
-                 return;
-             }
 
-             console.log(`[CtvDataGrid debug] Executing moveFocus (AutoFocus)`);
+             // autoFocus가 강제(true)가 아니면, 이미 다른 곳에 포커스가 있을 때 뺏지 않음
+             if (mergedSetting.value.autoFocus !== true) {
+                 if (state.isLoaded && !isFocusInGrid && document.activeElement !== document.body) {
+                     return;
+                 }
+             }
 
              const row = SBGrid3.getRowByIndex(grid, 0);
              if (!row) return;
@@ -547,8 +552,8 @@ const createGrid = async () => {
         });
     }
 
-    // ===== focusRow 양방향 동기화 설정 =====
-    setupFocusRowSync();
+    // ===== focusData 양방향 동기화 설정 =====
+    setupFocusDataSync();
 
 
     // ===== 동적 높이 설정 =====
@@ -579,7 +584,33 @@ const createGrid = async () => {
 /**
  * 데이터 조회 메서드
  */
-const query = async () => {
+const query = async (ignoreChanges = false) => {
+  if (!ignoreChanges && hasChanges.value) {
+      try {
+          await ElMessageBox.confirm(
+              '변경사항이 있습니다. 저장하시겠습니까?',
+              '확인',
+              {
+                  confirmButtonText: '확인',
+                  cancelButtonText: '저장 안 함',
+                  distinguishCancelAndClose: true,
+                  type: 'warning'
+              }
+          );
+          
+          // 확인: 저장 후 조회
+          await save();
+          return;
+      } catch (action) {
+          if (action === 'cancel') {
+              // 취소: 그냥 조회 (진행)
+          } else {
+              // 닫기/Esc: 중단
+              return;
+          }
+      }
+  }
+
   if (!mergedSetting.value.query) {
     console.warn('[CtvDataGrid] query가 설정되지 않았습니다.');
     return;
@@ -733,51 +764,50 @@ const clearChanges = () => {
 };
 
 /**
- * focusRow: 그리드 ↔ Form 양방향 동기화 (통합 솔루션)
- * - Grid → focusRow: 포커스 행 변경 시 focusRow 업데이트
- * - focusRow → Grid: focusRow 값 변경 시 그리드 셀 업데이트
+ * focusData: 그리드 ↔ Form 양방향 동기화 (통합 솔루션)
+ * - Grid → focusData: 포커스 행 변경 시 focusData 업데이트
+ * - focusData → Grid: focusData 값 변경 시 그리드 셀 업데이트
  */
-let focusRowWatcher = null;
+let focusDataWatcher = null; // previously focusRowWatcher
 let isSyncing = false; // 단일 플래그로 무한루프 방지
 let handleFormFieldBlur = null; // 폼 필드 blur 이벤트 핸들러 (cleanup용)
 
 /**
- * Grid → focusRow (포커스된 행 데이터를 focusRow에 복사)
+ * Grid → focusData (포커스된 행 데이터를 focusData에 복사)
  */
-const updateFocusRow = (grid, rowItem) => {
-    const focusRow = mergedSetting.value.focusRow;
-    if (!focusRow || typeof focusRow !== 'object') return;
+const updateFocusData = (grid, rowItem) => {
+    const focusData = mergedSetting.value.focusData;
+    if (!focusData || typeof focusData !== 'object') return;
 
     isSyncing = true;
     try {
         const rowData = SBGrid3.getFocusedValue(grid);
         if (!rowData) return;
 
-        Object.keys(focusRow).forEach(key => {
+        Object.keys(focusData).forEach(key => {
             const newVal = rowData[key] !== undefined && rowData[key] !== null ? rowData[key] : '';
-            if (focusRow[key] !== newVal) {
-                focusRow[key] = newVal;
+            if (focusData[key] !== newVal) {
+                focusData[key] = newVal;
             }
         })
 
-        console.log(`[CtvDataGrid] Grid → focusRow 동기화:`, mergedSetting.value.id, rowData);
     } finally {
         nextTick(() => { isSyncing = false; });
     }
 };
 
 /**
- * focusRow 초기화 (데이터 없을 때)
+ * focusData 초기화 (데이터 없을 때)
  */
-const clearFocusRow = () => {
-    const focusRow = mergedSetting.value.focusRow;
-    if (!focusRow || typeof focusRow !== 'object') return;
+const clearFocusData = () => {
+    const focusData = mergedSetting.value.focusData;
+    if (!focusData || typeof focusData !== 'object') return;
 
     isSyncing = true;
     try {
-        Object.keys(focusRow).forEach(key => {
-            if (focusRow[key] !== '') {
-                focusRow[key] = '';
+        Object.keys(focusData).forEach(key => {
+            if (focusData[key] !== '') {
+                focusData[key] = '';
             }
         });
     } finally {
@@ -786,27 +816,38 @@ const clearFocusRow = () => {
 };
 
 /**
- * focusRow → Grid 수동 동기화 (필드 blur 시 호출)
+ * focusData → Grid 수동 동기화 (필드 blur 시 호출)
  */
 const syncFormToGrid = () => {
-    const focusRow = mergedSetting.value.focusRow;
-    if (isSyncing || !datagrid.grid || !focusRow) return;
+    const focusData = mergedSetting.value.focusData;
+    if (isSyncing || !datagrid.grid || !focusData) return;
 
-    const focusedRow = SBGrid3.getFocusedRow(datagrid.grid);
-    const focusedKey = SBGrid3.getFocusedKey(datagrid.grid);
-    if (!focusedRow) return;
+    const targetRowIndex = state.lastFocusedRowIndex;
+    
+    // 초기 로딩 시 or 포커스 없는 경우
+    if (targetRowIndex === null || targetRowIndex === undefined) return;
 
-    console.log(`[CtvDataGrid] Form → Grid 동기화 (blur):`, mergedSetting.value.id);
+    // 현재 포커스 데이터 스냅샷 (이전 포커스 시점의 데이터)
+    const gridSnapshot = state.focusData;
+
+    // 스냅샷이 없으면 중단 (안전장치)
+    if (!gridSnapshot) return;
 
     isSyncing = true;
     try {
-        Object.keys(focusRow).forEach(key => {
-            const currentGridVal = SBGrid3.getValue(datagrid.grid, focusedKey, key);
-            const newValStr = String(focusRow[key] ?? '');
-            const currentValStr = String(currentGridVal ?? '');
+        Object.keys(focusData).forEach(key => {
+            // 비교 대상: Grid의 원래 데이터(스냅샷) vs Form의 현재 데이터
+            // 주의: gridSnapshot은 포커스 진입 시점의 데이터이므로, 
+            // 사용자가 수정한 form 데이터와 비교하여 변경된 것만 반영
+            const currentGridVal = String(gridSnapshot[key] ?? '');
+            const newValStr = String(focusData[key] ?? '');
 
-            if (currentValStr !== newValStr) {
-                SBGrid3.setRowValue(datagrid.grid, key, focusRow[key], focusedRow._rowIndex);
+            if (currentGridVal !== newValStr) {
+                // 변경사항 반영 (대상 행: targetRowIndex)
+                SBGrid3.setRowValue(datagrid.grid, key, focusData[key], targetRowIndex);
+                
+                // 연속된 변경을 위해 로컬 스냅샷도 갱신 (선택사항이나 권장)
+                gridSnapshot[key] = focusData[key];
             }
         });
     } finally {
@@ -815,9 +856,9 @@ const syncFormToGrid = () => {
 };
 
 /**
- * focusRow ↔ Grid 양방향 동기화 설정
+ * focusData ↔ Grid 양방향 동기화 설정
  */
-const setupFocusRowSync = () => {
+const setupFocusDataSync = () => {
     // watch 제거: 실시간 동기화 대신 blur 이벤트 기반으로 동작
     // syncFormToGrid는 필드 blur 시 수동 호출됨
 };
@@ -825,7 +866,7 @@ const setupFocusRowSync = () => {
 /**
  * 데이터 저장 메서드
  */
-const save = async () => {
+const save = async (reload = true) => {
   if (!datagrid.grid) return;
 
   const defaultOnValueConvert = (field, value) => {
@@ -875,7 +916,7 @@ const save = async () => {
 
   const onValueCheck = saveConfig.onValueCheck;
   const onValueConvert = saveConfig.onValueConvert || defaultOnValueConvert;
-  const reloadAfterSave = saveConfig.reloadAfterSave ?? true;
+  const reloadAfterSave = (saveConfig.reloadAfterSave ?? true) && reload;
 
   try {
       // 1. 유효성 검사
@@ -1001,7 +1042,7 @@ const save = async () => {
           }
 
           // 5. 성공 처리
-          await ElMessageBox.alert("정상적으로 저장처리 되었습니다.", '성공', { type: 'success' });dd
+          await ElMessageBox.alert("저장되었습니다.", '성공', { type: 'success' });
 
           if (saveConfig.onSuccess) {
                await saveConfig.onSuccess(result);
@@ -1011,7 +1052,7 @@ const save = async () => {
       }
 
       if (reloadAfterSave) {
-          await query(); // Reload data (shows its own loading)
+          await query(true); // Reload data (shows its own loading)
       } else {
           // 리로드 안하면 변경 상태 초기화 (저장 완료했으므로)
           // 하지만 API 호출 후 서버 데이터와 동기화되지 않은 상태일 수 있으므로 주의.
@@ -1045,28 +1086,80 @@ const reset = async () => {
 
 // Watch configuration changes to rebuild grid (Only for initial creation)
 watch(computedGridConfig, async (newVal) => {
-  console.log(`[CtvDataGrid debug] watch computedGridConfig - grid exists: ${!!datagrid.grid}`);
   if (newVal && !datagrid.grid) {
       await createGrid();
   }
 }, { immediate: true });
 
 // 활성 상태 관리
-const isActive = ref(false);
+const isActive = computed(() => {
+    // 그룹이 없는 단일 그리드는 항상 활성 상태 표시
+    if (!mergedSetting.value.group) {
+        return true;
+    }
+    // 그룹이 있는 경우 activeGridId와 비교
+    return activeGridId.value === props.id;
+});
 
-const handleActive = async () => {
-    const group = mergedSetting.value.group;
-    const id = mergedSetting.value.id;
+// 페이지 이탈 시 변경사항 확인 (beforeunload)
+const handleBeforeUnload = (e) => {
+    if (hasChanges.value) {
+        e.preventDefault();
+        e.returnValue = ''; // 표준 브라우저 동작: 기본 경고창 표시
+    }
+};
+
+/**
+ * 전역 블러 체크 설정 (mousedown 캡처링)
+ * 레거시 ctv-DataGrid.js의 _setupBlurCheck 로직 이식
+ */
+const setupGlobalBlurCheck = () => {
+    if (typeof document === 'undefined') return;
+    // 전역 플래그로 중복 등록 방지 (컴포넌트 인스턴스마다 실행되는 것 방지)
+    if (window.__ctv_global_blur_check_setup__) return;
     
-    if (!group || !id) return;
+    window.__ctv_global_blur_check_setup__ = true;
+    let isProcessing = false;
 
-    // 이미 활성화된 상태면 패스
-    if (isActive.value) return;
+    document.addEventListener('mousedown', async (e) => {
+        // 이미 처리 중이거나 재발송된 이벤트면 무시
+        if (isProcessing || e.isCtvRedispatched) return;
 
-    const prevActive = componentRegistry.getActive(group);
-    
-    // 이전 활성 그리드가 있고, 자신이 아니며, 변경사항이 있는 경우
-    if (prevActive && prevActive.id !== id && prevActive.hasChanges) {
+        // 클릭된 요소가 어떤 그리드에 속하는지 확인
+        const allComponents = Array.from(componentRegistry.getAll().values());
+        
+        // 클릭된 Grid 찾기
+        const clickedGridInst = allComponents.find(comp => {
+            return comp.container && comp.container.contains(e.target);
+        });
+
+        // 클릭된 곳이 그리드가 아니면 무시
+        if (!clickedGridInst) return;
+
+        // 그룹 확인
+        const group = clickedGridInst.group;
+        if (!group) return;
+
+        // 현재 그룹의 활성 그리드 확인
+        const activeGridInst = componentRegistry.getActive(group);
+        
+        // 활성 그리드가 없거나, 클릭된 그리드가 이미 활성 그리드라면 패스
+        if (!activeGridInst || activeGridInst.id === clickedGridInst.id) {
+            componentRegistry.setActive(group, clickedGridInst.id);
+            return;
+        }
+
+        // 활성 그리드에 변경사항이 있는지 확인
+        if (!activeGridInst.hasChanges) {
+            componentRegistry.setActive(group, clickedGridInst.id);
+            return;
+        }
+
+        // === 변경사항 있음: 이벤트 차단 및 컨펌 ===
+        e.preventDefault();
+        e.stopPropagation();
+        isProcessing = true;
+
         try {
             await ElMessageBox.confirm(
                 '변경사항이 있습니다. 저장하시겠습니까?',
@@ -1080,50 +1173,281 @@ const handleActive = async () => {
                     closeOnPressEscape: true
                 }
             );
-            
+
             // 저장 (Confirm)
-            if (prevActive.save) {
-                const saveResult = await prevActive.save();
-                // 저장이 성공(결과 반환)했는지 확인. save returns null on validation fail or empty.
-                // But if validation fail, we should probably stay.
-                // If update successful, we proceed.
-                if (saveResult) {
-                    componentRegistry.setActive(group, id);
-                }
+            if (activeGridInst.save) {
+                await activeGridInst.save();
+                componentRegistry.setActive(group, clickedGridInst.id);
+                reDispatchEvent(e);
             } else {
-                 // save fn missing? proceed
-                 componentRegistry.setActive(group, id);
+                 componentRegistry.setActive(group, clickedGridInst.id);
+                 reDispatchEvent(e);
             }
 
         } catch (action) {
             if (action === 'cancel') {
                 // 저장 안 함 (Discard)
-                if (prevActive.clearChanges) {
-                    prevActive.clearChanges();
-                }
-                componentRegistry.setActive(group, id);
-            } else {
-                // 취소 (Close/Esc) -> 유지
-                // do nothing
-                // Focus handling? If focus is already in new grid, logic says "maintain active grid".
-                // Visually border remains on old grid. 
-                // Optionally return focus to old grid:
-                // if (prevActive.setFocus) prevActive.setFocus();
+                if (activeGridInst.clearChanges) activeGridInst.clearChanges();
+                componentRegistry.setActive(group, clickedGridInst.id);
+                reDispatchEvent(e);
             }
+            // 취소 (Close/Esc) -> 유지 (이벤트는 이미 차단됨)
+        } finally {
+            isProcessing = false;
         }
+
+    }, true); // Use Capture Phase
+};
+
+/**
+ * 이벤트 재발송 헬퍼
+ * mousedown 이벤트 외에 mouseup, click 이벤트도 시뮬레이션하여 발송
+ */
+const reDispatchEvent = (originalEvent) => {
+    const target = originalEvent.target;
+    if (!target) return;
+
+    const eventTypes = ['mousedown', 'mouseup', 'click'];
+
+    eventTypes.forEach(type => {
+        const newEvent = new MouseEvent(type, {
+            bubbles: originalEvent.bubbles,
+            cancelable: originalEvent.cancelable,
+            view: originalEvent.view,
+            detail: originalEvent.detail,
+            screenX: originalEvent.screenX,
+            screenY: originalEvent.screenY,
+            clientX: originalEvent.clientX,
+            clientY: originalEvent.clientY,
+            ctrlKey: originalEvent.ctrlKey,
+            altKey: originalEvent.altKey,
+            shiftKey: originalEvent.shiftKey,
+            metaKey: originalEvent.metaKey,
+            button: originalEvent.button,
+            buttons: originalEvent.buttons,
+            relatedTarget: originalEvent.relatedTarget
+        });
+
+        // 재발송 플래그 설정 (무한루프 방지)
+        newEvent.isCtvRedispatched = true;
+
+        target.dispatchEvent(newEvent);
+    });
+};
+
+/**
+ * 행 추가 (defaultValue 옵션 적용)
+ * @param {Object} data - 추가할 데이터 (defaultValue와 병합됨)
+ */
+const addRow = (data) => {
+    if (!datagrid.grid) return;
+
+    // 기본값 처리 (함수 또는 객체)
+    let defaultVal = mergedSetting.value.defaultValue;
+    if (typeof defaultVal === 'function') {
+        const publicGrid = { datagrid: datagrid.grid };
+        defaultVal = defaultVal(publicGrid, state);
+    }
+    
+    // 데이터 병합 (입력 데이터가 우선)
+    const rowData = { ...(defaultVal || {}), ...(data || {}) };
+    // 현재 포커스된 행 찾기
+    const focusedRow = SBGrid3.getFocusedRow(datagrid.grid);
+    // focusedRow가 있으면 해당 행 뒤에 추가 (key 전달), 없으면 맨 뒤(null)에 추가
+    const key = focusedRow ? focusedRow._key : null;
+    
+    // 레거시 호환: appendRow 사용
+    if (typeof SBGrid3.appendRow === 'function') {
+        SBGrid3.appendRow(datagrid.grid, key, rowData);
+    } else if (typeof SBGrid3.insertRow === 'function') {
+         // insertRow가 key를 받는지 index를 받는지 불확실하지만, 
+         // 보통 key 기반이면 key를, index 기반이면 index를 넘겨야 함.
+         // SBGrid3는 보통 insertRow(grid, key, data) 형태임.
+         SBGrid3.insertRow(datagrid.grid, key, rowData);
     } else {
-        // 변경사항 없으면 바로 활성화
-        componentRegistry.setActive(group, id);
+        console.warn('[CtvDataGrid] SBGrid3.appendRow 또는 insertRow 메서드가 없습니다.');
+    }
+    
+    // 상태 업데이트
+    updateChangeStatus();
+};
+
+/**
+ * 행 삭제
+ */
+const deleteRow = () => {
+    if (!datagrid.grid) return;
+    
+    const focusedRow = SBGrid3.getFocusedRow(datagrid.grid);
+    if (focusedRow) {
+        SBGrid3.deleteRow(datagrid.grid, focusedRow._key);
+        updateChangeStatus();
+        
+        // 삭제 후 상태 초기화
+        state.selectedRowIdx = -1;
+        state.focusStatus = null;
+        state.focusData = null;
+    }
+};
+
+/**
+ * 행 정보 보기 모달 표시
+ */
+const showRowDetailModal = (grid, column, rowItem) => {
+    if (!grid || !rowItem) return;
+    
+    // 컬럼 정보 가져오기
+    const columns = SBGrid3.getColumns(grid);
+    const data = rowItem;
+
+    // 테이블 데이터 생성
+    const tableData = [];
+    columns.forEach(col => {
+        // 시스템 컬럼 등 제외 (RowNoColumn, 체크박스 등)
+        if (!col.field || col._name === 'RowNoColumn1' || col.type === 'check') return;
+        
+        // 1. Caption
+        let caption = col.caption;
+        if (Array.isArray(caption)) caption = caption[0];
+        if (!caption) caption = col.field;
+        
+        // 2. Value
+        let value = data?.data?.[col.field] ?? "";
+        if (value === undefined || value === null) value = '';
+
+        // 3. Key (Constraint)
+        const colType = (col.colType || '').toUpperCase();
+        const keys = [];
+        if (colType.includes('PK') || col.isPrimaryKey) keys.push('PK');
+        if (colType.includes('NN') || col.required) keys.push('NN');
+        if (colType.includes('EX') || col.saveExclude) keys.push('EX');
+        const keyStr = keys.join(', ');
+
+        // 4. Data Type
+        let dataType = col.dataType || 'string';
+        if (colType.includes('NUM') || colType.includes('NUMBER')) dataType = 'number';
+        else if (colType.includes('DATE')) dataType = 'date';
+        
+        // 5. Hidden
+        // SBGrid3 hidden 속성, visible 속성, colType H 체크
+        const colTypeHidden = colType.split('|').map(s => s.trim()).some(x => ['H', 'HIDE', 'HIDDEN'].includes(x));
+        const isHidden = col.hidden === true || col.visible === false || colTypeHidden;
+
+        // 6. Format
+        const format = col.formatType || col.format || '';
+        
+        tableData.push({ 
+            caption, 
+            field: col.field, 
+            key: keyStr, 
+            dataType, 
+            hidden: isHidden ? 'true' : 'false', 
+            format, 
+            value 
+        });
+    });
+
+    // VNode 생성 (ElTable 사용)
+    // height: 500px -> max-height 설정하여 내용만큼만 표시되도록 변경
+    const vnode = h('div', { style: 'max-height: 70vh; display: flex; flex-direction: column;' }, [
+        h(ElTable, { 
+            data: tableData, 
+            border: true, 
+            style: 'width: 100%; flex: 1;',
+            fit: true,
+            showHeader: true,
+            size: 'small',
+            'header-cell-style': { background: '#f5f7fa', color: '#606266', textAlign: 'center', fontWeight: 'bold' },
+        }, {
+            default: () => [
+                h(ElTableColumn, { prop: 'caption', label: 'Caption', width: '120', fixed: true }),
+                h(ElTableColumn, { prop: 'field', label: 'Field', width: '120' }),
+                h(ElTableColumn, { prop: 'key', label: 'Key', width: '60', align: 'center' }),
+                h(ElTableColumn, { prop: 'dataType', label: 'Data Type', width: '90', align: 'center' }),
+                h(ElTableColumn, { prop: 'hidden', label: 'Hidden', width: '70', align: 'center' }),
+                h(ElTableColumn, { prop: 'format', label: 'Format', width: '80', align: 'center' }),
+                h(ElTableColumn, { prop: 'value', label: 'Data Value', minWidth: '100' })
+            ]
+        })
+    ]);
+    
+    ElMessageBox({
+        title: '행 정보',
+        message: vnode,
+        confirmButtonText: '닫기',
+        customClass: 'ctv-row-detail-modal',
+        draggable: true,
+    });
+};
+
+/**
+ * 클립보드 데이터 붙여넣기 (현위치에 추가)
+ */
+const pasteClipboardData = async () => {
+    try {
+        const text = await navigator.clipboard.readText();
+        if (!text) return;
+
+        // 개행 문자로 분리 (마지막 빈 줄 제거)
+        const rows = text.split(/\r?\n/);
+        if (rows.length > 0 && rows[rows.length - 1].trim() === '') {
+            rows.pop();
+        }
+        if (rows.length === 0) return;
+
+        // 현재 포커스 위치
+        const focusedRow = SBGrid3.getFocusedRow(datagrid.grid);
+        const key = focusedRow ? focusedRow._key : null; 
+        
+        // 컬럼 정보 가져오기 (매핑용 - visible 컬럼만)
+        const columns = SBGrid3.getColumns(datagrid.grid).filter(col => 
+            col.field && // field가 있는 데이터 컬럼만 대상
+            !col.hidden && 
+            col.type !== 'check' && 
+            col._name !== 'RowNoColumn1' &&
+            col.type !== 'status' && // 상태 컬럼 제외
+            col.visible !== false 
+        );
+        
+        // 역순으로 순회하며 insertRow (key 바로 뒤에 계속 추가하면 순서가 뒤집히므로, 역순 데이터를 key 뒤에 넣으면 정순이 됨)
+        // 예: [A, B, C] -> C 넣음 -> B 넣음 -> A 넣음 => [key, A, B, C]
+        for (let i = rows.length - 1; i >= 0; i--) {
+            const rowText = rows[i];
+            const cells = rowText.split('\t');
+            const rowData = {};
+            
+            // 데이터 매핑
+            cells.forEach((cellValue, index) => {
+                if (index < columns.length) {
+                    const col = columns[index];
+                    rowData[col.field] = cellValue; // trim() 하지 않음 (공백 데이터 유지)
+                }
+            });
+        
+            
+            // insertRow (key 위치 다음에 추가됨)
+            SBGrid3.insertRow(datagrid.grid, key, rowData);
+        }
+
+        updateChangeStatus();
+        
+    } catch (err) {
+        console.error('클립보드 붙여넣기 실패:', err);
+        ElMessageBox.alert('클립보드 데이터에 접근할 수 없습니다.<br>브라우저 권한을 확인해주세요.', '오류', { dangerouslyUseHTMLString: true });
     }
 };
 
 onMounted(async () => {
+  window.addEventListener('beforeunload', handleBeforeUnload);
+
+  // 전역 리스너 설정 (최초 1회만 동작)
+  setupGlobalBlurCheck();
+
   // 폼 필드 blur 이벤트 리스너 추가 (필드 입력 완료 시 그리드 동기화)
   handleFormFieldBlur = (e) => {
     const { formModel } = e.detail;
-    // 현재 그리드의 focusRow와 같은 모델인 경우에만 동기화
-    if (formModel === mergedSetting.value.focusRow) {
-      console.log(`[CtvDataGrid] Form field blur detected, syncing to grid:`, mergedSetting.value.id);
+    // 현재 그리드의 focusData와 같은 모델인 경우에만 동기화
+    if (formModel === mergedSetting.value.focusData) {
       syncFormToGrid();
     }
   };
@@ -1135,11 +1459,15 @@ onMounted(async () => {
   // 컴포넌트 레지스트리에 등록
   if (mergedSetting.value.id) {
     componentRegistry.register(mergedSetting.value.id, {
+      id: mergedSetting.value.id,   // id 포함 (prevActive.id 비교를 위해)
       group: mergedSetting.value.group,
+      container: gridContainer.value, // 컨테이너 추가 등록 (클릭 감지용)
       query,
       setData,
       datagrid,
       save,
+      addRow, // 행 추가 메서드 노출
+      deleteRow, // 행 삭제 메서드 노출
       clearChanges, // Expose clearChanges
       getRowStatus,
       state, // Expose reactive state directly
@@ -1150,7 +1478,8 @@ onMounted(async () => {
       get selectedRowIdx() { return state.selectedRowIdx; },
       get focusStatus() { return state.focusStatus; },
       // active state helper
-      setActive: (active) => { isActive.value = active; }
+      setActive: (active) => { isActive.value = active; },
+      get focusData() { return state.focusData; }
     });
 
     // 전역 window 객체에 그리드 인스턴스 노출 (레거시/외부 접근용)
@@ -1183,10 +1512,10 @@ onMounted(async () => {
 });
 
 onBeforeUnmount(() => {
-  // focusRow watcher 정리
-  if (focusRowWatcher) {
-    focusRowWatcher();
-    focusRowWatcher = null;
+  // focusData watcher 정리
+  if (focusDataWatcher) {
+    focusDataWatcher();
+    focusDataWatcher = null;
   }
 
   // 폼 필드 blur 이벤트 리스너 제거
@@ -1213,6 +1542,7 @@ onBeforeUnmount(() => {
   // window resize 이벤트 정리
   if (handleResize) {
     window.removeEventListener('resize', handleResize);
+    window.removeEventListener('beforeunload', handleBeforeUnload);
     handleResize = null;
   }
 
@@ -1222,11 +1552,25 @@ onBeforeUnmount(() => {
   }
 });
 
+/**
+ * 그리드 컨테이너 클릭 핸들러
+ * SBGrid3 이벤트와 별개로 컨테이너 클릭 시에도 activeGridId 업데이트
+ */
+const handleGridClick = () => {
+    if (props.id) {
+        activeGridId.value = props.id;
+    }
+};
+
+
+
 // 외부에서 접근 가능한 메서드 노출
 defineExpose({
   setData,
   datagrid,
   save,
+  addRow,
+  deleteRow,
   hasChanges,
   state
 });
@@ -1234,9 +1578,25 @@ defineExpose({
 
 <style scoped>
 .ctv-data-grid {
+  position: relative;
   width: 100%;
   height: 100%;
+  overflow: hidden;
   border: 1px solid transparent; /* 기본 테두리 */
   box-sizing: border-box;
+}
+</style>
+
+<style>
+/* 행 상세 정보 모달 (넓게 표시 - 전역 스타일) */
+.ctv-row-detail-modal {
+  --el-messagebox-width: auto !important; /* 너비를 컨텐츠에 맞춤 */
+  min-width: 600px; /* 너무 작아지지 않도록 최소 너비 설정 */
+  max-width: 840px !important;
+  /* 내용물 스크롤 처리 */
+}
+.ctv-row-detail-modal .el-message-box__content {
+    overflow: auto;
+    max-height: 80vh;
 }
 </style>

@@ -220,10 +220,8 @@ const handleAction = async (btn) => {
   const action = btn.action;
   
   if (action === 'append') {
-      if (typeof SBGrid3 !== 'undefined' && grid) {
-          SBGrid3.appendRow(grid);
-      } else if (targetComponent.appendRow) {
-          targetComponent.appendRow();
+if (targetComponent.addRow) {
+          targetComponent.addRow();
       }
   } else if (action === 'delete') {
       // SBGrid3 삭제 로직 상세 구현

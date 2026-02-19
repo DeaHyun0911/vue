@@ -212,7 +212,7 @@ export function applyLockTypeToColumns(columns, getGridInstance) {
 }
 
 export function getDefaultGridConfig(instance) {
-    return {
+    const config = {
         width: "100%",
         height: "100%",
         defaultColumn: {
@@ -258,6 +258,21 @@ export function getDefaultGridConfig(instance) {
         },
         virtualColumn: true,
     };
+
+    // 행 정보 보기 메뉴 추가
+    if (instance && typeof instance.showRowDetailModal === 'function') {
+        config.contextMenu.push({
+            item: "showRowDetail",
+            enabled: true,
+            label: "행정보 보기",
+            icon: "eye",
+            click: (grid, column, rowItem) => {
+                instance.showRowDetailModal(grid, column, rowItem);
+            },
+        });
+    }
+
+    return config;
 }
 
 /**
@@ -266,7 +281,7 @@ export function getDefaultGridConfig(instance) {
  * @returns {Object} 편집 가능한 그리드에 추가할 설정 객체
  */
 export function getEditableGridConfig(instance) {
-    return {
+    const config = {
         showStatus: true,
         navigatable: { tabToNextCell: { edit: true } },
         hideDeleted: true,
@@ -281,6 +296,34 @@ export function getEditableGridConfig(instance) {
         pasteable: true,
         contextMenu: ["sort", "undo", "redo", "column"],
     };
+
+    // 현위치에 추가 메뉴 추가
+    if (instance && typeof instance.pasteClipboardData === 'function') {
+        config.contextMenu.push({
+            item: "addPasteRow",
+            enabled: true,
+            label: "현위치에 추가",
+            icon: "addRow",
+            click: (grid, column, rowItem) => {
+                instance.pasteClipboardData();
+            },
+        });
+    }
+
+    // 행 정보 보기 메뉴 추가
+    if (instance && typeof instance.showRowDetailModal === 'function') {
+        config.contextMenu.push({
+            item: "showRowDetail",
+            enabled: true,
+            label: "행정보 보기",
+            icon: "eye",
+            click: (grid, column, rowItem) => {
+                instance.showRowDetailModal(grid, column, rowItem);
+            },
+        });
+    }
+
+    return config;
 }
 
 /**

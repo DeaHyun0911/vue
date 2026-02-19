@@ -12,4 +12,5 @@ export { default as CtvContainer } from './CtvContainer.vue';
 export { default as CtvTextarea } from './CtvTextarea.vue';
 export { default as CtvForm } from './CtvForm.vue';
 export { default as CtvFormItem } from './CtvFormItem.vue';
+export { default as CtvTabs } from './CtvTabs.vue';
 

@@ -21,11 +21,18 @@
         style="width: 100%; box-sizing: border-box;"
         v-bind="$attrs"
       >
-        <template v-if="$slots.prepend" #prepend>
+        <!-- 슬롯 Pass-through -->
+        <template #prepend v-if="$slots.prepend">
             <slot name="prepend"></slot>
         </template>
-        <template v-if="$slots.append" #append>
+        <template #append v-if="$slots.append">
             <slot name="append"></slot>
+        </template>
+        <template #prefix v-if="$slots.prefix">
+            <slot name="prefix"></slot>
+        </template>
+        <template #suffix v-if="$slots.suffix">
+            <slot name="suffix"></slot>
         </template>
       </el-input>
       <div v-if="hasError" class="ctv-error-msg">{{ errorMessage }}</div>

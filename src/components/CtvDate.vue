@@ -70,7 +70,8 @@ const { innerValue: formValue, onFormFieldBlur } = useFormField(props, emit);
 const innerValue = computed({
   get: () => formValue.value,
   set: (val) => {
-    formValue.value = val;
+    // null 값(선택 해제 시)은 빈 문자열로 변환하여 처리
+    formValue.value = val === null ? '' : val;
   }
 });
 

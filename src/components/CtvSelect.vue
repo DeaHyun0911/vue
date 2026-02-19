@@ -31,7 +31,7 @@
         </template>
         <template v-else-if="options && options.length">
             <el-option
-                v-for="item in options"
+                v-for="item in filteredOptions"
                 :key="item.value"
                 :label="item.label"
                 :value="item.value"
@@ -58,7 +58,9 @@ const props = defineProps({
   labelAlign: { type: String, default: 'left' },
   labelWidth: { type: [String, Number], default: 100 },
   required: Boolean,
-  field: String // New prop for implicit binding
+  field: String, // New prop for implicit binding
+  parentValue: [String, Number], // 부모 값
+  linkKey: { type: String, default: 'pcode' }, // 연결 키 (기본값: pcode)
 });
 
 import { useFormField } from '../composables/useFormField';
@@ -66,6 +68,43 @@ import { useFormField } from '../composables/useFormField';
 const emit = defineEmits(['update:modelValue', 'change', 'blur', 'focus']);
 
 const { innerValue, onFormFieldBlur } = useFormField(props, emit);
+
+// 필터링된 옵션 목록
+const filteredOptions = computed(() => {
+    // 1. parentValue가 undefined이면 일반 모드 (필터링 안 함)
+    // CtvQueryFilter에서 parent 설정이 없으면 undefined를 전달함
+    if (props.parentValue === undefined) {
+        return props.options;
+    }
+
+    // 2. 부모 값이 있는데 비어있는 경우(null, '') -> 모든 옵션 반환
+    if (!props.parentValue) {
+        return props.options;
+    }
+
+    // 3. 필터링 수행 (타입 변환 고려하여 동등 비교 == 사용)
+    // linkKey는 기본값 'pcode'가 설정되어 있음
+    return props.options.filter(opt => opt[props.linkKey] == props.parentValue);
+});
+
+// 부모 값 변경 시 자식 값 초기화 로직
+watch(() => props.parentValue, (newVal) => {
+    if(!props.linkKey) return;
+
+    // 만약 현재 선택된 값이 새로운 필터링 목록에 없다면 초기화
+    // (값이 비어있지 않을 때만 체크)
+    if (innerValue.value) {
+        const isValid = filteredOptions.value.some(opt => opt.value == innerValue.value);
+        if (!isValid) {
+            innerValue.value = ''; // 초기화
+            // emit('change', ''); // useFormField 내부에서 watch로 emit 하므로 중복 방지? 
+            // innerValue 변경시 useFormField가 update:modelValue는 emit함. change는 별도.
+            // 명시적으로 change 이벤트 발생이 필요할 수 있음.
+            emit('change', '');
+            onFormFieldBlur();
+        }
+    }
+});
 
 // 폼 포커스 상태 관리 (inject from CtvForm)
 const formFocusState = inject('formFocusState', null);

@@ -1,3 +1,6 @@
+import { ref } from 'vue';
+
+export const activeGridId = ref('');
 
 /**
  * 전역 콤보 데이터 로드 함수

@@ -20,9 +20,29 @@
             v-bind="field.props"
             :title="undefined" 
             :model-value="getModelValue(field)"
+            :parent-value="field.parent ? fieldValues[field.parent] : undefined"
             @update:model-value="handleUpdate(field, $event)"
             @keyup.enter="handleQuery"
-          />
+          >
+            <!-- 동적 슬롯 렌더링 (Mixed Input 지원) -->
+            <template v-for="(slotData, slotName) in field.slots" :key="slotName" v-slot:[slotName]>
+                <!-- 1. 컴포넌트 렌더링 -->
+                <component 
+                  v-if="slotData.component" 
+                  :is="slotData.component"
+                  v-bind="slotData.props"
+                  :model-value="slotData.field ? getModelValue(slotData) : undefined"
+                  :parent-value="slotData.parent ? fieldValues[slotData.parent] : undefined"
+                  @update:model-value="slotData.field ? handleUpdate(slotData, $event) : undefined"
+                  v-on="slotData.events || {}"
+                  :style="slotData.style"
+                >
+                    {{ slotData.content }}
+                </component>
+                <!-- 2. 단순 컨텐츠 -->
+                <span v-else-if="slotData.content" v-html="slotData.content"></span>
+            </template>
+          </component>
         </ctv-form-item>
       </ctv-form>
       
@@ -216,7 +236,18 @@ const getDefaultValue = (field) => {
 const initializeFieldValues = () => {
   const fields = mergedSetting.value.fields || [];
   fields.forEach(field => {
-    if (!(field.field in fieldValues)) {
+    if (Array.isArray(field.field)) {
+        const defaultValues = field.props?.defaultValue;
+        field.field.forEach((key, index) => {
+            if (!(key in fieldValues)) {
+                if (Array.isArray(defaultValues) && defaultValues[index] !== undefined) {
+                    fieldValues[key] = defaultValues[index];
+                } else {
+                    fieldValues[key] = '';
+                }
+            }
+        });
+    } else if (!(field.field in fieldValues)) {
       fieldValues[field.field] = getDefaultValue(field);
     }
   });
@@ -262,6 +293,10 @@ const getModelValue = (field) => {
   }
   
   // modelValue가 없으면 내부 상태 사용
+  // 배열 필드 처리
+  if (Array.isArray(field.field)) {
+      return field.field.map(key => fieldValues[key]);
+  }
   return fieldValues[field.field];
 };
 
@@ -270,11 +305,23 @@ const getModelValue = (field) => {
  */
 const handleUpdate = (field, value) => {
   // 내부 상태 업데이트
-  fieldValues[field.field] = value;
+  if (Array.isArray(field.field)) {
+      if (Array.isArray(value)) {
+          field.field.forEach((key, index) => {
+              fieldValues[key] = value[index];
+          });
+      } else {
+          // 값이 null이거나 비어있을 때 초기화
+          field.field.forEach(key => {
+              fieldValues[key] = '';
+          });
+      }
+  } else {
+      fieldValues[field.field] = value;
+      // 외부로 이벤트 발생 (하위 호환성)
+      emit('update:field', field.field, value);
+  }
   
-  // 외부로 이벤트 발생 (하위 호환성)
-  emit('update:field', field.field, value);
-
   // autoLoad 옵션이 있는 경우 자동 조회 (주로 ctv-select 등에서 사용)
   if (field.autoLoad) {
       nextTick(() => {
