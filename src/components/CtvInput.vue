@@ -2,7 +2,7 @@
   <div 
     class="ctv-wrapper" 
     :style="wrapperStyle"
-    :class="{ 'ctv-error': hasError }"
+    :class="{ 'ctv-error': hasError, 'is-required': required }"
   >
     <div class="ctv-body">
       <el-input
@@ -56,7 +56,9 @@ const props = defineProps({
   labelWidth: { type: [String, Number], default: 100 }, // Default label width based on typical ERP layout
   required: Boolean,
   validate: [Object, String, Function], // validation rule
-  field: String // New prop for implicit binding
+  field: String, // New prop for implicit binding
+  prependRatio: { type: [String, Number], default: null },
+  appendRatio: { type: [String, Number], default: null }
 });
 
 import { useFormField } from '../composables/useFormField';
@@ -99,9 +101,18 @@ const validate = () => {
     return true;
 };
 
-const wrapperStyle = computed(() => ({
-    width: '100%',
-}));
+const wrapperStyle = computed(() => {
+    const style = { width: '100%' };
+    if (props.prependRatio) {
+        const val = props.prependRatio;
+        style['--ctv-prepend-width'] = !isNaN(Number(val)) ? `${val}%` : val;
+    }
+    if (props.appendRatio) {
+        const val = props.appendRatio;
+        style['--ctv-append-width'] = !isNaN(Number(val)) ? `${val}%` : val;
+    }
+    return style;
+});
 
 
 
@@ -114,5 +125,43 @@ defineExpose({ validate });
 }
 :deep(.el-input__wrapper.is-focus) {
     box-shadow: 0 0 0 1px #409eff inset;
+}
+
+/* Input Group 스타일 개선 for Mixed Input */
+:deep(.el-input-group__prepend),
+:deep(.el-input-group__append) {
+    padding: 0;
+    background-color: #fff; /* 배경색 일치 */
+}
+
+/* 슬롯 내부 CtvInput wrapper 초기화 */
+:deep(.el-input-group__prepend .ctv-wrapper),
+:deep(.el-input-group__append .ctv-wrapper) {
+    margin: 0;
+    width: 100%; /* 비율을 따르도록 100% 로 변경 */
+    min-width: 0;
+}
+
+/* 슬롯 내부 input - 테두리 및 그림자 제거하여 자연스럽게 연결 */
+:deep(.el-input-group__prepend .el-input__wrapper),
+:deep(.el-input-group__append .el-input__wrapper) {
+    background-color: transparent !important;
+    border-radius: 0;
+    margin-right: -1px;
+}
+
+/* 구분선 추가 및 비율 적용 */
+:deep(.el-input-group__prepend) {
+    border-right: 1px solid #dcdfe6;
+    width: var(--ctv-prepend-width, auto);
+}
+:deep(.el-input-group__append) {
+    border-left: 1px solid #dcdfe6;
+    width: var(--ctv-append-width, auto);
+}
+
+/* 필수값 표시 */
+.ctv-wrapper.is-required :deep(.el-input__wrapper) {
+    background-color: #fefce8 !important; /* light yellow (tailwind yellow-50) */
 }
 </style>

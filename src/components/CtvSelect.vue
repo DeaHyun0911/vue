@@ -2,7 +2,7 @@
   <div 
     class="ctv-wrapper" 
     :style="wrapperStyle"
-    :class="{ 'ctv-error': hasError }"
+    :class="{ 'ctv-error': hasError, 'is-required': required }"
   >
     <div class="ctv-body">
       <el-select
@@ -167,6 +167,12 @@ defineExpose({ validate });
 /* (선택사항) 드롭다운 그림자나 테두리 스타일을 ERP스럽게 단정하게 변경 */
 .clean-dropdown.el-popper {
     border-radius: 2px !important; /* 둥근 모서리 줄이기 */
+    border-radius: 2px !important; /* 둥근 모서리 줄이기 */
     box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1) !important;
+}
+
+/* 필수값 표시 */
+.ctv-wrapper.is-required :deep(.el-input__wrapper) {
+    background-color: #fefce8 !important; /* light yellow */
 }
 </style>

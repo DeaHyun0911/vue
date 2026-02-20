@@ -1,5 +1,10 @@
 <template>
   <div class="ctv-tabs">
+    <!-- 우측 툴바용 슬롯 -->
+    <div v-if="$slots.toolbar" class="ctv-tabs-toolbar">
+      <slot name="toolbar"></slot>
+    </div>
+
     <el-tabs 
       v-model="activeName" 
       :type="type" 
@@ -149,5 +154,16 @@ onMounted(() => {
 <style scoped>
 .ctv-tabs {
   width: 100%;
+  position: relative;
+}
+
+.ctv-tabs-toolbar {
+  position: absolute;
+  top: 0;
+  right: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  height: 40px; /* el-tabs 기본 헤더 높이와 맞춤 (필요시 조정) */
 }
 </style>

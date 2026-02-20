@@ -16,7 +16,8 @@ import {
   getEditableGridConfig,
   applyColTypeToColumns,
   applyLockTypeToColumns,
-  applyDefaultUnitToColumns
+  applyDefaultUnitToColumns,
+  parseTreeColumns
 } from '../utils/gridUtils.js';
 import { activeGridId } from '../utils/common.js';
 import componentRegistry from '../utils/componentRegistry.js';
@@ -363,23 +364,38 @@ const createGrid = async () => {
     const finalConfig = { ...gridConfig };
     
     if (finalConfig.columns && Array.isArray(finalConfig.columns)) {
-       // Deep copy columns to allow modification
-       finalConfig.columns = finalConfig.columns.map(col => ({ ...col }));
+       // 트리 형태의 columns 를 flat 시키고 captions 행렬 생성
+       const treeParsed = parseTreeColumns(finalConfig.columns);
        
-      // 1. colType 파싱
-      finalConfig.columns = applyColTypeToColumns(finalConfig.columns);
-      
-      // 1-1. lockType 파싱
-      finalConfig.columns = applyLockTypeToColumns(finalConfig.columns, () => datagrid.grid);
+       if (treeParsed.captions) {
+           // 트리 병합 다중 헤더 모드 (SBGrid3 그룹 캡션 랩핑)
+           let processedColumns = treeParsed.columns.map(col => ({ ...col }));
+           processedColumns = applyColTypeToColumns(processedColumns);
+           processedColumns = applyLockTypeToColumns(processedColumns, () => datagrid.grid);
 
-      // 2. defaultUnit 처리 (SBGrid3 옵션 아님 - 제거 필요)
-      if (finalConfig.defaultUnit !== undefined) {
-        finalConfig.columns = applyDefaultUnitToColumns(
-          finalConfig.columns,
-          finalConfig.defaultUnit
-        );
-        delete finalConfig.defaultUnit;
-      }
+           if (finalConfig.defaultUnit !== undefined) {
+               processedColumns = applyDefaultUnitToColumns(processedColumns, finalConfig.defaultUnit);
+               delete finalConfig.defaultUnit;
+           }
+
+           finalConfig.columns = [
+               {
+                   columns: processedColumns,
+                   captions: treeParsed.captions,
+                   rows: [ treeParsed.captions[treeParsed.captions.length - 1] ] // 마지막 캡션을 rows 배열로 설정하여 명시적 바인딩
+               }
+           ];
+       } else {
+           // 1차원 기본 헤더 모드
+           finalConfig.columns = treeParsed.columns.map(col => ({ ...col }));
+           finalConfig.columns = applyColTypeToColumns(finalConfig.columns);
+           finalConfig.columns = applyLockTypeToColumns(finalConfig.columns, () => datagrid.grid);
+
+           if (finalConfig.defaultUnit !== undefined) {
+             finalConfig.columns = applyDefaultUnitToColumns(finalConfig.columns, finalConfig.defaultUnit);
+             delete finalConfig.defaultUnit;
+           }
+       }
     }
 
     // ===== 컨테이너 설정 =====
@@ -1098,8 +1114,15 @@ const isActive = computed(() => {
         return true;
     }
     // 그룹이 있는 경우 activeGridId와 비교
-    return activeGridId.value === props.id;
+    return activeGridId.value === mergedSetting.value.id;
 });
+
+// activeGridId를 관찰하여 변경되면 componentRegistry 업데이트
+watch(activeGridId, (newId) => {
+    if (newId && newId === mergedSetting.value.id && mergedSetting.value.group) {
+        componentRegistry.setActive(mergedSetting.value.group, newId);
+    }
+}, { immediate: true });
 
 // 페이지 이탈 시 변경사항 확인 (beforeunload)
 const handleBeforeUnload = (e) => {
@@ -1437,6 +1460,45 @@ const pasteClipboardData = async () => {
     }
 };
 
+/**
+ * 엑셀 파일에서 데이터 임포트
+ */
+const importFromExcel = async (file, options = {}) => {
+    const excelImportConfig = {
+        delimiter: ',',
+        row: { from: 3 },
+        col: { from: 2 },
+        appendable: true,
+        insertStatus: true,
+        ...options
+    };
+
+    try {
+        if (!file) {
+            throw new Error('파일이 선택되지 않았습니다.');
+        }
+
+        if (!datagrid.grid) {
+             throw new Error('그리드가 초기화되지 않았습니다.');
+        }
+
+        // SBGrid3의 내장 excelImport 사용
+        await SBGrid3.excelImport(datagrid.grid, file, excelImportConfig);
+        
+        // 데이터 추가 후 변경 상태 업데이트
+        updateChangeStatus();
+
+        return {
+            success: true,
+            message: '엑셀 파일을 성공적으로 불러왔습니다.'
+        };
+
+    } catch (error) {
+        console.error('[CtvDataGrid] 엑셀 임포트 오류:', error);
+        throw error;
+    }
+};
+
 onMounted(async () => {
   window.addEventListener('beforeunload', handleBeforeUnload);
 
@@ -1468,6 +1530,7 @@ onMounted(async () => {
       save,
       addRow, // 행 추가 메서드 노출
       deleteRow, // 행 삭제 메서드 노출
+      importFromExcel, // Excel 업로드 기능 노출
       clearChanges, // Expose clearChanges
       getRowStatus,
       state, // Expose reactive state directly
@@ -1478,34 +1541,29 @@ onMounted(async () => {
       get selectedRowIdx() { return state.selectedRowIdx; },
       get focusStatus() { return state.focusStatus; },
       // active state helper
-      setActive: (active) => { isActive.value = active; },
+      setActive: (active) => { 
+          if(active && mergedSetting.value.id) activeGridId.value = mergedSetting.value.id; 
+      },
       get focusData() { return state.focusData; }
     });
 
-    // 전역 window 객체에 그리드 인스턴스 노출 (레거시/외부 접근용)
-    if (mergedSetting.value.id) {
-        window[mergedSetting.value.id] = componentRegistry.get(mergedSetting.value.id);
-    }
-
-    // 첫 번째 등록된 그리드라면 기본 활성화
+    // 그룹 이벤트 구독: 클릭 등으로 인해 componentRegistry 활성 컴포넌트가 변경되면 activeGridId 갱신
     const group = mergedSetting.value.group;
     if (group) {
-        // 그룹 이벤트 구독
         componentRegistry.subscribe(group, (activeId) => {
-            isActive.value = (activeId === mergedSetting.value.id);
+            if (activeId === mergedSetting.value.id && activeGridId.value !== activeId) {
+                activeGridId.value = activeId;
+            }
         });
 
-        const active = componentRegistry.getActive(group);
-        if (!active) {
+        // 명시적으로 세팅된 activeComponents가 없으면 첫번째 그리드로 초기화
+        if (!componentRegistry.activeComponents.get(group)) {
             componentRegistry.setActive(group, mergedSetting.value.id);
-        } else {
-             // 이미 활성화된 컴포넌트가 있으면 상태 동기화
-             isActive.value = (active.id === mergedSetting.value.id);
         }
     }
 
     // 전역 변수로 등록 (window.grid1 등)
-    if (typeof window !== 'undefined') {
+    if (typeof window !== 'undefined' && mergedSetting.value.id) {
         window[mergedSetting.value.id] = componentRegistry.get(mergedSetting.value.id);
     }
   }
@@ -1557,8 +1615,8 @@ onBeforeUnmount(() => {
  * SBGrid3 이벤트와 별개로 컨테이너 클릭 시에도 activeGridId 업데이트
  */
 const handleGridClick = () => {
-    if (props.id) {
-        activeGridId.value = props.id;
+    if (mergedSetting.value.id) {
+        activeGridId.value = mergedSetting.value.id;
     }
 };
 
@@ -1571,6 +1629,7 @@ defineExpose({
   save,
   addRow,
   deleteRow,
+  importFromExcel,
   hasChanges,
   state
 });

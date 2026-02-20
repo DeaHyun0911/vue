@@ -2,7 +2,7 @@
   <div 
     class="ctv-date-wrapper" 
     :style="wrapperStyle"
-    :class="{ 'ctv-error': hasError }"
+    :class="{ 'ctv-error': hasError, 'is-required': required }"
   >
     <div class="ctv-body">
       <el-date-picker
@@ -11,8 +11,8 @@
         :placeholder="placeholder"
         :start-placeholder="startPlaceholder"
         :end-placeholder="endPlaceholder"
-        :format="format"
-        :value-format="valueFormat"
+        :format="activeFormat"
+        :value-format="activeValueFormat"
         :disabled="disabled"
         :readonly="readonly"
         @change="handleChange"
@@ -54,14 +54,20 @@ import { useFormField } from '../composables/useFormField';
 const emit = defineEmits(['update:modelValue', 'change']);
 
 // Default formats based on type
-const defaultFormat = computed(() => {
+const defaultDisplayFormat = computed(() => {
   if (props.type.includes('month')) return 'YYYY-MM';
   if (props.type.includes('year')) return 'YYYY';
   return 'YYYY-MM-DD';
 });
 
-const activeFormat = computed(() => props.format || defaultFormat.value);
-const activeValueFormat = computed(() => props.valueFormat || defaultFormat.value);
+const defaultValueFormat = computed(() => {
+  if (props.type.includes('month')) return 'YYYYMM';
+  if (props.type.includes('year')) return 'YYYY';
+  return 'YYYYMMDD';
+});
+
+const activeFormat = computed(() => props.format || defaultDisplayFormat.value);
+const activeValueFormat = computed(() => props.valueFormat || defaultValueFormat.value);
 
 // Use form field composable
 const { innerValue: formValue, onFormFieldBlur } = useFormField(props, emit);
@@ -101,5 +107,11 @@ const handleBlur = () => {
 :deep(.el-input__wrapper) {
     box-sizing: border-box;
     width: 100%;
+}
+
+/* 필수값 표시 */
+.ctv-date-wrapper.is-required :deep(.el-input__wrapper),
+.ctv-date-wrapper.is-required :deep(.el-range-editor.el-input__wrapper) {
+    background-color: #fefce8 !important; /* light yellow */
 }
 </style>

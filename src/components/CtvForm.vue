@@ -11,6 +11,7 @@
       :class="[`columns-${columns}`]"
       :label-width="effectiveLabelWidth"
       :label-position="labelPosition"
+      :rules="rules"
       :style="gridStyle"
     >
       <slot />
@@ -42,6 +43,10 @@ const props = defineProps({
     type: String,
     default: 'right',
     validator: (value) => ['left', 'right', 'top'].includes(value)
+  },
+  rules: {
+    type: Object,
+    default: () => ({})
   }
 });
 

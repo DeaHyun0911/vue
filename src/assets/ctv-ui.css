@@ -193,11 +193,6 @@ body {
     cursor: not-allowed;
 }
 
-.sbgrid-grid .sbgrid-cell.sbgrid-edit {
-    height: 100%;
-    padding: 0;
-}
-
 .sbgrid-panel.sbgrid-body .sbgrid-row>.sbgrid-col.sbgrid-focused {
     border: 1px solid var(--active) !important;
     outline: none;
@@ -343,7 +338,7 @@ div.sbgrid-hidden .sbgrid-col>.sbgrid-caption {
 .ctv-container .ctv-query-filter input,
 .ctv-container .ctv-free-form-container input,
 .ctv-container .ctv-select-trigger {
-    min-width: 100px;
+    min-width: 80px;
 }
 
 .ctv-container .ctv-content {
@@ -2091,7 +2086,7 @@ ol {
 }
 
 .el-button+.el-button {
-    margin-left: 0px;
+    margin-left: 8px;
 }
 
 .el-header {
@@ -2177,4 +2172,12 @@ ol {
 
 .el-input__inner {
     text-align: center;
+}
+
+.el-tabs__nav-wrap:after {
+    height: 1px;
+}
+
+.el-dialog__title {
+    font-weight: 600;
 }

@@ -28,6 +28,14 @@
         </ctv-button>
       </template>
     </div>
+
+    <!-- 내장 엑셀 일괄 등록 모달 -->
+    <ctv-excel-upload-modal
+      v-model="excelUploadVisible"
+      :sample-name="excelSampleName"
+      :uploading="isExcelUploading"
+      @upload="handleExcelUpload"
+    ></ctv-excel-upload-modal>
   </div>
 </template>
 
@@ -42,12 +50,15 @@ const props = defineProps({
   setting: { type: Object, default: null }
 });
 
+const emit = defineEmits(['action']);
+
 const mergedSetting = computed(() => {
     const settings = props.setting || {};
     return {
         target: props.target || settings.target,
         left: (props.left && props.left.length) ? props.left : (settings.left || []),
         right: (props.right && props.right.length) ? props.right : (settings.right || []),
+        excelImportConfig: settings.excelImportConfig || {}
     };
 });
 
@@ -108,6 +119,7 @@ const defaultButtons = {
   save: { id: 'save', label: '저장', action: 'save', icon: 'Check', type: 'primary' },
   excel: { id: 'excel', action: 'excel', icon: 'Download', plain: true },
   print: { id: 'print', action: 'print', icon: 'Printer' },
+  excelImport: { id: 'excelImport', label: '엑셀일괄등록', action: 'excelImport', icon: 'Upload' }
 };
 
 const resolveButtons = (list) => {
@@ -139,12 +151,13 @@ const resolveButtons = (list) => {
       }
       return btn;
     } else if (typeof item === 'object') {
-        // Merge with default if id/action matches
-        const key = item.id || item.action;
-        let btn = item;
+        // Merge with default if id/action/tool matches
+        const key = item.id || item.action || item.tool;
+        let btn = { ...item };
 
         if (key && defaultButtons[key]) {
             btn = { ...defaultButtons[key], ...item };
+            if (!btn.action) btn.action = defaultButtons[key].action;
         }
         
         // save 버튼 상태 처리
@@ -278,6 +291,8 @@ if (targetComponent.addRow) {
       } else {
           console.warn(`[CtvToolBox] Target component '${mergedSetting.value.target}' does not support save.`);
       }
+  } else if (action === 'excelImport') {
+      excelUploadVisible.value = true;
   } else if (action === 'excel') {
       if (typeof SBGrid3 !== 'undefined' && grid) {
           SBGrid3.excelExport(grid);
@@ -288,9 +303,60 @@ if (targetComponent.addRow) {
       // 일반적인 메서드 호출
       targetComponent[action]();
   } else {
-      console.warn(`[CtvToolBox] Action '${action}' not supported by target '${mergedSetting.value.target}'.`);
+      // 지정된 action이 target 컴포넌트에 없으면 이벤트를 상위로 올려보냄
+      emit('action', action, targetComponent);
   }
 };
+
+// --- 내장 엑셀 업로드 처리 로직 ---
+const excelUploadVisible = ref(false);
+const isExcelUploading = ref(false);
+
+const excelSampleName = computed(() => {
+    return mergedSetting.value.excelImportConfig?.sampleName || '';
+});
+
+const handleExcelUpload = async (file) => {
+    if (!file) return;
+
+    let targetComponent = null;
+    const targetId = mergedSetting.value.target;
+    if (targetId) {
+        targetComponent = componentRegistry.get(targetId) || componentRegistry.getActive(targetId);
+    }
+
+    if (!targetComponent || typeof targetComponent.importFromExcel !== 'function') {
+        if(window.Ctv && window.Ctv.ctvAlert) {
+            window.Ctv.ctvAlert('이 기능을 지원하지 않는 그리드이거나 타겟을 찾을 수 없습니다.', '오류');
+        } else {
+            ElMessageBox.alert('이 기능을 지원하지 않는 대상입니다.', '오류', { type: 'error' });
+        }
+        return;
+    }
+
+    isExcelUploading.value = true;
+    try {
+        await targetComponent.importFromExcel(file, mergedSetting.value.excelImportConfig || {});
+        
+        if (window.Ctv && window.Ctv.ctvAlert) {
+            window.Ctv.ctvAlert('엑셀 데이터를 성공적으로 불러왔습니다.<br>데이터를 확인하시고 <b>저장</b> 버튼을 클릭하여 반영해주세요.', '알림');
+        } else {
+            ElMessageBox.alert('엑셀 데이터를 성공적으로 불러왔습니다.', '알림', { type: 'success' });
+        }
+        excelUploadVisible.value = false;
+    } catch (error) {
+        console.error("엑셀 업로드 오류:", error);
+        if (window.Ctv && window.Ctv.ctvAlert) {
+            window.Ctv.ctvAlert(`엑셀 임포트 중 오류가 발생했습니다.<br>${error.message || ''}`, '오류');
+        } else {
+            ElMessageBox.alert(`오류가 발생했습니다.<br>${error.message}`, '오류', { type: 'error', dangerouslyUseHTMLString: true });
+        }
+    } finally {
+        isExcelUploading.value = false;
+    }
+};
+// ------------------------------------
+
 </script>
 
 <style scoped>
@@ -303,7 +369,6 @@ if (targetComponent.addRow) {
 
 .left-tools, .right-tools {
   display: flex;
-  gap: 8px;
   align-items: center;
 }
 </style>

@@ -1,5 +1,5 @@
 <template>
-  <el-form-item v-bind="$attrs" class="ctv-form-item">
+  <el-form-item v-bind="$attrs" :prop="prop" :rules="rules" class="ctv-form-item">
     <!-- Pass through all slots -->
     <template v-for="(_, name) in $slots" #[name]="slotData">
       <slot :name="name" v-bind="slotData || {}" />
@@ -8,7 +8,16 @@
 </template>
 
 <script setup>
-// Wrapper for el-form-item to ensure consistent styling or behavior if needed
+defineProps({
+  prop: {
+    type: [String, Array],
+    default: ''
+  },
+  rules: {
+    type: [Object, Array],
+    default: () => []
+  }
+});
 </script>
 
 <style scoped>

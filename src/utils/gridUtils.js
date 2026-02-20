@@ -379,11 +379,37 @@ export function parseColType(colType) {
                 result.type = "date";
                 result.calendarType = 'date';
                 dataTypeCode = "STR";
+
+                result.valueFormat = (value) => {
+                    return Replace(value, "-", "");
+                };
+                result.format = 'yyyy-MM-dd';
+                result.formatInputValue = (value) => {
+                    if (!value || typeof value !== 'string') return value || '';
+                    return value.replace(/^(\d{4})(\d{2})(\d{2})$/, '$1-$2-$3');
+                };
+                result.getValue = (value) => {
+                    if (!value || typeof value !== 'string') return value || '';
+                    return value.replace(/^(\d{4})(\d{2})(\d{2})$/, '$1-$2-$3');
+                };
                 break;
             case "MONTH":
                 result.type = "date";
                 result.calendarType = 'yearMonth';
                 dataTypeCode = "STR";
+
+                result.valueFormat = (value) => {
+                    return Replace(value, "-", "");
+                };
+                result.format = 'yyyy-MM';
+                result.formatInputValue = (value) => {
+                    if (!value || typeof value !== 'string') return value || '';
+                    return value.replace(/^(\d{4})(\d{2})$/, '$1-$2');
+                };
+                result.getValue = (value) => {
+                    if (!value || typeof value !== 'string') return value || '';
+                    return value.replace(/^(\d{4})(\d{2})$/, '$1-$2');
+                };
                 break;
             case "L":
             case "LEFT":
@@ -610,6 +636,99 @@ export function applyDefaultUnitToColumns(columns, defaultUnit) {
 
         return result;
     });
+}
+
+/**
+ * 2. Tree 구조의 columns를 평탄화하고 captions(Matrix)을 생성
+ * @param {Array} columns - 트리 구조의 컬럼 설정 배열
+ * @returns {Object} { columns: 평탄화된 배열, captions: 2차원 배열 }
+ */
+export function parseTreeColumns(columns) {
+    if (!columns || !Array.isArray(columns) || columns.length === 0) {
+        return { columns: [], captions: null };
+    }
+
+    // 트리 최대 깊이(Max Depth) 계산
+    const getMaxDepth = (cols) => {
+        let max = 0;
+        for (const col of cols) {
+            if (col.columns && Array.isArray(col.columns) && col.columns.length > 0) {
+                max = Math.max(max, 1 + getMaxDepth(col.columns));
+            } else {
+                max = Math.max(max, 1);
+            }
+        }
+        return max;
+    };
+
+    const maxDepth = getMaxDepth(columns);
+
+    // 트리 구조가 1단계(depth=1)이면 기존 방식대로 반환 (captions 매트릭스 불필요)
+    if (maxDepth <= 1) {
+        return { columns: columns, captions: null };
+    }
+
+    const flatColumns = [];
+    const captionsMatrix = Array.from({ length: maxDepth }, () => []);
+    const groupCaptions = new Set(); // SBGrid3 바인딩용 중간 더미 컬럼 추적
+
+    // DFS 탐색하여 리프 노드를 flatColumns에 추가하고 경로 기록
+    const traverse = (cols, currentDepth, pathNames) => {
+        for (const col of cols) {
+            // 현재 노드의 캡션 (배열이면 첫 번째 값 사용, 없으면 필드명)
+            let currentCaption = col.caption;
+            if (Array.isArray(currentCaption)) {
+                currentCaption = currentCaption[0] || col.field || '';
+            } else if (!currentCaption && currentCaption !== '') {
+                currentCaption = col.field || '';
+            }
+
+            const currentPath = [...pathNames, currentCaption];
+
+            if (col.columns && Array.isArray(col.columns) && col.columns.length > 0) {
+                // 자식 노드가 있으면 계속 탐색
+                groupCaptions.add(currentCaption); // 그룹 캡션 기록
+                traverse(col.columns, currentDepth + 1, currentPath);
+            } else {
+                // 리프 노드이면 flatColumns에 추가 (columns 속성은 제거)
+                const flatCol = { ...col };
+                delete flatCol.columns;
+                flatColumns.push(flatCol);
+
+                // 패딩(Padding): 리프 노드에 도달했는데 최대 깊이보다 얕은 경우 마지막 캡션으로 세로 병합되도록 채움
+                const paddedPath = [...currentPath];
+                while (paddedPath.length < maxDepth) {
+                    paddedPath.push(currentCaption);  
+                }
+
+                // 2차원 배열(matrix)에 열 단위로 추가
+                for (let i = 0; i < maxDepth; i++) {
+                    captionsMatrix[i].push(paddedPath[i]);
+                }
+            }
+        }
+    };
+
+    traverse(columns, 0, []);
+
+    // 트리 병합을 위해 부모(중간) 노드로 쓰인 caption들을 더미 컬럼으로 추가 (SBGrid3 다중헤더 필수 요건)
+    // - captions 에 선언된 문자열은 반드시 columns의 caption 프로퍼티에 존재해야 함
+    // - 리프 노드와 겹치는 이름일 경우 추가하지 않음
+    const leafCaptions = new Set(flatColumns.map(c => Array.isArray(c.caption) ? c.caption[0] : c.caption));
+    let mergeIdx = 1;
+    groupCaptions.forEach(gCaption => {
+        if (!leafCaptions.has(gCaption)) {
+            flatColumns.push({
+                field: `MERGE_DUMMY_${mergeIdx++}`,
+                caption: gCaption
+            });
+        }
+    });
+
+    return {
+        columns: flatColumns,
+        captions: captionsMatrix
+    };
 }
 
 

@@ -4,18 +4,24 @@
       <!-- 필터 필드 영역 -->
       <ctv-form 
         class="filter-form" 
-        :columns="mergedSetting.columns" 
-        :label-width="mergedSetting.labelWidth"
+        :columns="responsiveColumns" 
         :label-position="mergedSetting.labelPosition"
+        :model="fieldValues"
+        :rules="mergedSetting.rules"
+        :validate-on-rule-change="false"
+        ref="formRef"
         :style="formStyle"
       >
         <ctv-form-item
           v-for="(field, index) in normalizedFields"
           :key="index"
           :label="field.props.title"
+          :prop="field.props?.prop || (Array.isArray(field.field) ? field.field[0] : field.field)"
+          :rules="field.props?.rules"
           :style="getFieldStyle(field)"
         >
           <component
+            v-if="field.component !== 'ctv-empty'"
             :is="field.component"
             v-bind="field.props"
             :title="undefined" 
@@ -43,6 +49,7 @@
                 <span v-else-if="slotData.content" v-html="slotData.content"></span>
             </template>
           </component>
+          <div v-else class="ctv-empty-space" :style="field.style || {}"></div>
         </ctv-form-item>
       </ctv-form>
       
@@ -74,7 +81,7 @@
 </template>
 
 <script setup>
-import { reactive, computed, watch, onMounted, nextTick } from 'vue';
+import { reactive, computed, watch, onMounted, nextTick, ref, onUnmounted } from 'vue';
 import componentRegistry from '../utils/componentRegistry.js';
 
 const props = defineProps({
@@ -147,6 +154,14 @@ const props = defineProps({
     type: String,
     default: 'right'
   },
+  labelPosition: {
+    type: String,
+    default: 'right'
+  },
+  rules: {
+    type: Object,
+    default: () => ({})
+  },
   setting: { type: Object, default: null }
 });
 
@@ -162,8 +177,35 @@ const mergedSetting = computed(() => {
         buttons: props.buttons && Object.keys(props.buttons).length ? props.buttons : (settings.buttons || {}),
         id: props.id || settings.id,
         labelWidth: props.labelWidth !== 'auto' ? props.labelWidth : (settings.labelWidth || 'auto'),
-        labelPosition: props.labelPosition !== 'right' ? props.labelPosition : (settings.labelPosition || 'right')
+        labelWidth: props.labelWidth !== 'auto' ? props.labelWidth : (settings.labelWidth || 'auto'),
+        labelPosition: props.labelPosition !== 'right' ? props.labelPosition : (settings.labelPosition || 'right'),
+        rules: props.rules && Object.keys(props.rules).length ? props.rules : (settings.rules || {})
     };
+});
+
+const formRef = ref(null);
+const validate = (...args) => formRef.value?.validate(...args);
+const clearValidate = (...args) => formRef.value?.clearValidate(...args);
+
+const windowWidth = ref(typeof window !== 'undefined' ? window.innerWidth : 1200);
+
+const updateWidth = () => {
+    windowWidth.value = window.innerWidth;
+};
+
+onMounted(() => {
+    window.addEventListener('resize', updateWidth);
+});
+
+onUnmounted(() => {
+    window.removeEventListener('resize', updateWidth);
+});
+
+const responsiveColumns = computed(() => {
+    const base = mergedSetting.value.columns;
+    if (windowWidth.value <= 768) return 1;
+    if (windowWidth.value <= 1400) return Math.max(1, Math.ceil(base / 2));
+    return base;
 });
 
 const emit = defineEmits(['update:field', 'query', 'reset']);
@@ -173,17 +215,59 @@ const emit = defineEmits(['update:field', 'query', 'reset']);
  */
 const normalizedFields = computed(() => {
   const fields = mergedSetting.value.fields || [];
+  const rules = mergedSetting.value.rules || {};
+  
   return fields.map(field => {
     // 깊은 복사 또는 props 병합
     const defaultProps = {
       labelAlign: 'right' // 기본값: 오른쪽 정렬
     };
     
+    // Evaluate dynamic props based on current state
+    let extraProps = {};
+    if (typeof field.condition === 'function') {
+        extraProps = field.condition(fieldValues);
+    }
+    
+    // Check if field is required based on rules
+    let isRequired = false;
+    
+    // 1. Check prop.required
+    if (field.props?.required) {
+        isRequired = true;
+    } 
+    // 2. Check rules (global or local)
+    else {
+        // Handle array fields (check if any field in the group is required)
+        const fieldNames = Array.isArray(field.field) ? field.field : [field.field];
+        
+        for (const name of fieldNames) {
+            // Global rules
+            if (rules[name]) {
+                const ruleList = Array.isArray(rules[name]) ? rules[name] : [rules[name]];
+                if (ruleList.some(r => r.required)) {
+                    isRequired = true;
+                    break;
+                }
+            }
+            // Local rules (prop.rules)
+            if (field.props?.rules) {
+                 const ruleList = Array.isArray(field.props.rules) ? field.props.rules : [field.props.rules];
+                 if (ruleList.some(r => r.required)) {
+                     isRequired = true;
+                     break;
+                 }
+            }
+        }
+    }
+    
     return {
       ...field,
       props: {
         ...defaultProps,
-        ...(field.props || {})
+        ...(field.props || {}),
+        ...extraProps,
+        required: isRequired
       }
     };
   });
@@ -233,23 +317,38 @@ const getDefaultValue = (field) => {
 /**
  * 필드 값 초기화
  */
-const initializeFieldValues = () => {
+ const initializeFieldValues = () => {
   const fields = mergedSetting.value.fields || [];
+  
+  const initField = (item) => {
+      // 1. 메인 필드 초기화
+      if (item.field) {
+          if (Array.isArray(item.field)) {
+              const defaultValues = item.props?.defaultValue;
+              item.field.forEach((key, index) => {
+                  if (!(key in fieldValues)) {
+                      if (Array.isArray(defaultValues) && defaultValues[index] !== undefined) {
+                          fieldValues[key] = defaultValues[index];
+                      } else {
+                          fieldValues[key] = '';
+                      }
+                  }
+              });
+          } else if (!(item.field in fieldValues)) {
+              fieldValues[item.field] = getDefaultValue(item);
+          }
+      }
+
+      // 2. 슬롯 내부 필드 재귀적 초기화
+      if (item.slots) {
+          Object.values(item.slots).forEach(slotItem => {
+              if (slotItem) initField(slotItem);
+          });
+      }
+  };
+
   fields.forEach(field => {
-    if (Array.isArray(field.field)) {
-        const defaultValues = field.props?.defaultValue;
-        field.field.forEach((key, index) => {
-            if (!(key in fieldValues)) {
-                if (Array.isArray(defaultValues) && defaultValues[index] !== undefined) {
-                    fieldValues[key] = defaultValues[index];
-                } else {
-                    fieldValues[key] = '';
-                }
-            }
-        });
-    } else if (!(field.field in fieldValues)) {
-      fieldValues[field.field] = getDefaultValue(field);
-    }
+      initField(field);
   });
 };
 
@@ -336,7 +435,10 @@ const handleUpdate = (field, value) => {
 const handleQuery = () => {
   // target이 지정된 경우
   if (mergedSetting.value.target) {
-    const targetComponent = componentRegistry.get(mergedSetting.value.target);
+    let targetComponent = componentRegistry.get(mergedSetting.value.target);
+    if (!targetComponent) {
+      targetComponent = componentRegistry.getActive(mergedSetting.value.target);
+    }
     if (targetComponent?.query) {
       targetComponent.query();
     }
@@ -372,7 +474,10 @@ const handleReset = () => {
 
   // target이 지정된 경우
   if (mergedSetting.value.target) {
-    const targetComponent = componentRegistry.get(mergedSetting.value.target);
+    let targetComponent = componentRegistry.get(mergedSetting.value.target);
+    if (!targetComponent) {
+      targetComponent = componentRegistry.getActive(mergedSetting.value.target);
+    }
     if (targetComponent?.reset) {
       targetComponent.reset();
     }
@@ -402,9 +507,17 @@ onMounted(() => {
     componentRegistry.register(mergedSetting.value.id, {
       group: mergedSetting.value.group,
       getFieldValues,
-      reset: handleReset
+      reset: handleReset,
+      validate
     });
   }
+  
+  // 마운트 시 초기 검증 상태 제거
+  nextTick(() => {
+    if (formRef.value) {
+      formRef.value.clearValidate();
+    }
+  });
 });
 
 /**
@@ -412,7 +525,9 @@ onMounted(() => {
  */
 defineExpose({
   getFieldValues,
-  reset: handleReset
+  reset: handleReset,
+  validate,
+  clearValidate
 });
 </script>
 
@@ -436,7 +551,6 @@ defineExpose({
 
 .button-group {
   display: flex;
-  gap: 8px;
   flex-shrink: 0;
 }
 
@@ -453,5 +567,10 @@ defineExpose({
     justify-content: flex-end;
     margin-bottom: 0;
   }
+}
+
+.ctv-empty-space {
+  width: 100%;
+  height: 100%;
 }
 </style>
