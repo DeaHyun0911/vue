@@ -2181,3 +2181,7 @@ ol {
 .el-dialog__title {
     font-weight: 600;
 }
+
+.ctv-container .ctv-query-filter .el-input-group__prepend .el-input__inner {
+    min-width: auto;
+}

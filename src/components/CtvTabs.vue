@@ -56,8 +56,10 @@
 </template>
 
 <script setup>
-import { computed, watch, onMounted } from 'vue';
+import { computed, watch, onMounted, nextTick } from 'vue';
 import { ElTabs, ElTabPane } from 'element-plus';
+import { activeGridId } from '../utils/common.js';
+import componentRegistry from '../utils/componentRegistry.js';
 
 const props = defineProps({
   modelValue: {
@@ -105,6 +107,15 @@ const props = defineProps({
     type: Boolean,
     default: false
   },
+  /**
+   * 탭 변경 시 자동으로 연동할 그리드의 명칭 처리 (기본: 'grid')
+   * 탭 이름이 'tab1'이고 syncGrid 값이 'grid'(또는 true)이면,
+   * 'grid1' 그리드를 활성화하고 조회(query)함.
+   */
+  syncGrid: {
+    type: [Boolean, String],
+    default: false
+  }
 });
 
 const emit = defineEmits(['update:modelValue', 'tab-click', 'tab-remove', 'tab-add', 'edit']);
@@ -143,6 +154,23 @@ const selectFirstTab = () => {
 watch(() => props.items, () => {
   selectFirstTab();
 }, { deep: true });
+
+// 탭 자동 동기화 로직 (syncGrid)
+watch(() => activeName.value, async (newTab) => {
+  if (props.syncGrid && newTab) {
+    const prefix = typeof props.syncGrid === 'string' && props.syncGrid !== '' ? props.syncGrid : 'grid';
+    const gridId = newTab.replace('tab', prefix);
+    
+    await nextTick();
+    
+    activeGridId.value = gridId;
+
+    const gridInstance = componentRegistry.get(gridId);
+    if (gridInstance && typeof gridInstance.query === 'function') {
+      gridInstance.query();
+    }
+  }
+}, { immediate: true });
 
 onMounted(() => {
   selectFirstTab();

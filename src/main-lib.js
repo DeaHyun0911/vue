@@ -38,7 +38,8 @@ const Ctv = {
     install,
     ...Utils,
     componentRegistry,
-    get: (id) => componentRegistry.get(id)
+    get: (id) => componentRegistry.get(id),
+    get activeGrid() { return componentRegistry.get(Utils.activeGridId.value); }
 };
 
 if (typeof window !== 'undefined') {

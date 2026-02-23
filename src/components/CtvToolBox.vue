@@ -6,7 +6,7 @@
           v-if="btn.visible !== false"
           :type="btn.type" 
           :icon="btn.icon" 
-          :disabled="btn.disabled"
+          :disabled="typeof btn.disabled === 'function' ? btn.disabled() : btn.disabled"
           @click="handleAction(btn)"
         >
           {{ btn.label }}
@@ -21,7 +21,7 @@
           v-if="btn.visible !== false"
           :type="btn.type" 
           :icon="btn.icon" 
-          :disabled="btn.disabled"
+          :disabled="typeof btn.disabled === 'function' ? btn.disabled() : btn.disabled"
           @click="handleAction(btn)"
         >
           {{ btn.label }}
@@ -162,12 +162,8 @@ const resolveButtons = (list) => {
         
         // save 버튼 상태 처리
         if (btn.action === 'save') {
-             // targetInstance가 있고 hasChanges 속성이 있으면 그 값에 따라 disabled 설정
-             // hasChanges가 true면 disabled false (활성화)
-             // hasChanges가 false면 disabled true (비활성화)
-             // 단, item.disabled가 명시적으로 true면 항상 비활성화
              if (targetInstance.value && typeof targetInstance.value.hasChanges !== 'undefined') {
-                 if (!btn.disabled) {
+                 if (typeof item.disabled === 'undefined') {
                       btn.disabled = !targetInstance.value.hasChanges;
                  }
              }
@@ -178,8 +174,9 @@ const resolveButtons = (list) => {
              if (targetInstance.value) {
                  // 데이터 조회 여부 (isLoaded)
                  if (typeof targetInstance.value.isLoaded !== 'undefined') {
-                     // 기본적으로 조회 되어야 활성화
-                     btn.disabled = !targetInstance.value.isLoaded;
+                     if (typeof item.disabled === 'undefined') {
+                         btn.disabled = !targetInstance.value.isLoaded;
+                     }
                  }
              }
         }
@@ -187,13 +184,14 @@ const resolveButtons = (list) => {
         // delete 버튼 상태 처리
         if (btn.action === 'delete') {
              if (targetInstance.value) {
-                 // 조회 되었고(isLoaded), 데이터가 있고(totalRows > 0), 선택된 행이 있어야 함(selectedRowIdx != -1)
-                 // 단, SBGrid 로직에 따라 행이 없어도 선택이 안되어도 될 수 있지만 요청사항 따름
-                 const isLoaded = targetInstance.value.isLoaded;
-                 const hasRows = targetInstance.value.totalRows > 0;
-                 const hasSelection = targetInstance.value.selectedRowIdx !== -1;
-                 
-                 btn.disabled = !(isLoaded && hasRows && hasSelection);
+                 if (typeof item.disabled === 'undefined') {
+                     // 조회 되었고(isLoaded), 데이터가 있고(totalRows > 0), 선택된 행이 있어야 함(selectedRowIdx != -1)
+                     const isLoaded = targetInstance.value.isLoaded;
+                     const hasRows = targetInstance.value.totalRows > 0;
+                     const hasSelection = targetInstance.value.selectedRowIdx !== -1;
+                     
+                     btn.disabled = !(isLoaded && hasRows && hasSelection);
+                 }
              }
         }
         

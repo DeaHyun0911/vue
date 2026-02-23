@@ -146,7 +146,7 @@ defineExpose({ validate });
 :deep(.el-input-group__prepend .el-input__wrapper),
 :deep(.el-input-group__append .el-input__wrapper) {
     background-color: transparent !important;
-    border-radius: 0;
+    border-radius: 4px 0px 0px 4px;
     margin-right: -1px;
 }
 

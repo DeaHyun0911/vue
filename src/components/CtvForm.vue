@@ -76,7 +76,7 @@ const gridStyle = computed(() => {
   return {
     display: 'grid',
     gridTemplateColumns: `repeat(${cols}, 1fr)`,
-    gap: '15px 20px', // row-gap handled by form-item margin
+    gap: '8px 20px', // row-gap handled by form-item margin
   };
 });
 

@@ -1,9 +1,4 @@
 
-// test-grid-form.js
-
-// 1. Mock Data is loaded from mock-data.js
-
-// 2. Vue App
 const { createApp, reactive, toRefs, onMounted } = Vue;
 
 const app = createApp({
@@ -29,7 +24,7 @@ const app = createApp({
                     {
                         field: "FG_SYS",
                         component: "ctv-select",
-                        props: { title: "System Type", options: [] } // Will be updated in onMounted
+                        props: { title: "System Type", options: [] }
                     },
                     {
                         field: "NM_CODE",
@@ -76,13 +71,13 @@ const app = createApp({
             }
         });
 
-        // focusRow를 formModel로 연결 (양방향 바인딩)
+
         state.mainGrid.focusRow = state.formModel;
 
         onMounted(async () => {
             await window.Ctv.setCombo(state.options, { FG_SYS: {}, YN_USE: {} });
 
-            // Sync options to filter config
+
             const sysField = state.filter.fields.find(f => f.field === 'FG_SYS');
             if (sysField) sysField.props.options = state.options.FG_SYS;
         });

@@ -81,9 +81,9 @@ export async function setCombo(targetOptions, codeMap) {
         if (typeof val === 'string') {
             return { "CODE": val, "FLAG": "0" };
         }
-        // 객체로 넘긴 경우 (예: { CODE: "B019", FLAG: "0-Y" })
+        // 객체로 넘긴 경우 (예: { CODE: "B019", FLAG: "0-Y", CD_DTL: "..." })
         else {
-            return { "CODE": val.CODE, "FLAG": val.FLAG || "0" };
+            return { ...val, "FLAG": val.FLAG || "0" };
         }
     });
 

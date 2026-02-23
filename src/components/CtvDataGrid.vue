@@ -128,9 +128,13 @@ const datagrid = reactive({ grid: null });
  */
 const mergedSetting = computed(() => {
   const settings = props.setting || {};
+  
+  // 전역 gMenuTabinfo.insauth 권한이 "2"(저장권한)일 경우 기본 editable true 지정 (없으면 false)
+  const defaultEditable = gMenuTabinfo && gMenuTabinfo.insauth === "2";
+
   return {
     gridConfig: props.gridConfig || settings.gridConfig,
-    editable: props.editable !== undefined ? props.editable : (settings.editable !== undefined ? settings.editable : true),
+    editable: props.editable !== undefined ? props.editable : (settings.editable !== undefined ? settings.editable : defaultEditable),
     autoLoad: props.autoLoad !== undefined ? props.autoLoad : (settings.autoLoad !== undefined ? settings.autoLoad : true),
     dataQuery: props.dataQuery && Object.keys(props.dataQuery).length ? props.dataQuery : (settings.dataQuery || {}),
     save: props.save && Object.keys(props.save).length ? props.save : (settings.save || {}),
@@ -339,6 +343,14 @@ const createGrid = async () => {
     return;
   }
 
+  if (!gridContainer.value) {
+    await nextTick();
+    if (!gridContainer.value) {
+        console.warn("[CtvDataGrid] DOM 컨테이너(gridContainer)가 준비되지 않아 그리드 생성을 대기합니다.");
+        return;
+    }
+  }
+
   // 기존 그리드 파괴 (재생성 시)
   if (datagrid.grid && typeof SBGrid3.destroy === 'function') {
     SBGrid3.destroy(datagrid.grid);
@@ -417,7 +429,7 @@ const createGrid = async () => {
     // ... (Logics remain same, verify references) ...
     // Since we are inside the same scope, I can reuse previous logic but need to ensure it uses finalConfig
     
-    if (mergedSetting.value.editable !== false) {
+    if (mergedSetting.value.editable !== false && finalConfig.editable !== false) {
       const editableConfig = getEditableGridConfig({ showRowDetailModal, pasteClipboardData });
 
       if (finalConfig.showStatus === undefined) finalConfig.showStatus = editableConfig.showStatus;
@@ -600,7 +612,7 @@ const createGrid = async () => {
 /**
  * 데이터 조회 메서드
  */
-const query = async (ignoreChanges = false) => {
+async function query(ignoreChanges = false) {
   if (!ignoreChanges && hasChanges.value) {
       try {
           await ElMessageBox.confirm(
@@ -737,7 +749,8 @@ const _flattenColumns = (columns, excludeEX = false) => {
   if (!Array.isArray(columns)) return result;
 
   for (const col of columns) {
-    if (col.multiColumn && Array.isArray(col.columns)) {
+    // col.columns가 있으면 재귀적으로 탐색 (SBGrid3 다중 헤더 또는 그룹 구조 대응)
+    if (Array.isArray(col.columns) && col.columns.length > 0) {
       result.push(..._flattenColumns(col.columns, excludeEX));
     } else if (col.field) {
       if (excludeEX) {
@@ -800,12 +813,12 @@ const updateFocusData = (grid, rowItem) => {
         const rowData = SBGrid3.getFocusedValue(grid);
         if (!rowData) return;
 
-        Object.keys(focusData).forEach(key => {
+        Object.keys(rowData).forEach(key => {
             const newVal = rowData[key] !== undefined && rowData[key] !== null ? rowData[key] : '';
             if (focusData[key] !== newVal) {
                 focusData[key] = newVal;
             }
-        })
+        });
 
     } finally {
         nextTick(() => { isSyncing = false; });
@@ -874,7 +887,7 @@ const syncFormToGrid = () => {
 /**
  * focusData ↔ Grid 양방향 동기화 설정
  */
-const setupFocusDataSync = () => {
+function setupFocusDataSync() {
     // watch 제거: 실시간 동기화 대신 blur 이벤트 기반으로 동작
     // syncFormToGrid는 필드 blur 시 수동 호출됨
 };
@@ -882,7 +895,7 @@ const setupFocusDataSync = () => {
 /**
  * 데이터 저장 메서드
  */
-const save = async (reload = true) => {
+async function save(reload = true) {
   if (!datagrid.grid) return;
 
   const defaultOnValueConvert = (field, value) => {
@@ -1105,7 +1118,7 @@ watch(computedGridConfig, async (newVal) => {
   if (newVal && !datagrid.grid) {
       await createGrid();
   }
-}, { immediate: true });
+}, { immediate: true, flush: 'post' });
 
 // 활성 상태 관리
 const isActive = computed(() => {
@@ -1316,18 +1329,19 @@ const deleteRow = () => {
 /**
  * 행 정보 보기 모달 표시
  */
-const showRowDetailModal = (grid, column, rowItem) => {
+function showRowDetailModal(grid, column, rowItem) {
     if (!grid || !rowItem) return;
     
-    // 컬럼 정보 가져오기
-    const columns = SBGrid3.getColumns(grid);
+    // 컬럼 정보 가져오기 (평탄화하여 모든 리프 컬럼 추출)
+    const allColumns = SBGrid3.getColumns(grid);
+    const columns = _flattenColumns(allColumns);
     const data = rowItem;
 
     // 테이블 데이터 생성
     const tableData = [];
     columns.forEach(col => {
-        // 시스템 컬럼 등 제외 (RowNoColumn, 체크박스 등)
-        if (!col.field || col._name === 'RowNoColumn1' || col.type === 'check') return;
+        // 시스템 컬럼 및 병합용 더미 컬럼 제외
+        if (!col.field || col._name === 'RowNoColumn1' || col.type === 'check' || col.field.startsWith('MERGE_DUMMY')) return;
         
         // 1. Caption
         let caption = col.caption;
@@ -1406,7 +1420,7 @@ const showRowDetailModal = (grid, column, rowItem) => {
 /**
  * 클립보드 데이터 붙여넣기 (현위치에 추가)
  */
-const pasteClipboardData = async () => {
+async function pasteClipboardData() {
     try {
         const text = await navigator.clipboard.readText();
         if (!text) return;

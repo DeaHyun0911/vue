@@ -64,6 +64,33 @@ export const GRID_VALIDATORS = {
 };
 
 /**
+ * 사전 정의된 커스텀 포맷 형식 (customFormat: 'numberOmit' 등)
+ */
+export const CUSTOM_FORMATS = {
+    // Y/N 값을 아이콘으로 표시 (N 값 기준)
+    YN: {
+        format: (value) => value === 'N'
+            ? '<span class="cell-icon no">N</span>'
+            : '<span class="cell-icon yes">Y</span>',
+        description: 'Y/N 값을 아이콘으로 표시 (N이 no, Y가 yes)'
+    },
+    // Y/N 값을 아이콘으로 표시 (0 값 기준)
+    YN_0: {
+        format: (value) => value === '0'
+            ? '<span class="cell-icon no">N</span>'
+            : '<span class="cell-icon yes">Y</span>',
+        description: 'Y/N 값을 아이콘으로 표시 (0이 no, 그 외가 yes)'
+    },
+    // O/X 값을 아이콘으로 표시 (O 값 기준)
+    OX: {
+        format: (value) => value === 'O'
+            ? '<span class="cell-icon yes">O</span>'
+            : '<span class="cell-icon no">X</span>',
+        description: 'O/X 값을 아이콘으로 표시 (O가 yes, X가 no)'
+    },
+};
+
+/**
  * validators 정규화 (문자열 -> 객체 변환)
  * @param {Array|String} validators 
  * @returns {Array} 정규화된 validators 배열
@@ -491,6 +518,17 @@ export function applyColTypeToColumns(columns) {
         // 중첩된 columns가 있는 경우 재귀적으로 처리
         if (expandedColumn.columns && Array.isArray(expandedColumn.columns)) {
             expandedColumn.columns = applyColTypeToColumns(expandedColumn.columns);
+        }
+
+        // customFormat 처리 (미리 정의된 포맷 패턴 적용)
+        if (expandedColumn.customFormat && typeof expandedColumn.customFormat === 'string') {
+            const formatPattern = CUSTOM_FORMATS[expandedColumn.customFormat];
+            if (formatPattern && formatPattern.format) {
+                expandedColumn.format = formatPattern.format;
+            } else {
+                console.warn(`[CtvDataGrid] 알 수 없는 customFormat: "${expandedColumn.customFormat}"`);
+            }
+            delete expandedColumn.customFormat;
         }
 
         // combo/inputCombo 처리

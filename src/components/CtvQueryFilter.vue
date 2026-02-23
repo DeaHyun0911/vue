@@ -5,15 +5,16 @@
       <ctv-form 
         class="filter-form" 
         :columns="responsiveColumns" 
+        :label-width="mergedSetting.labelWidth"
         :label-position="mergedSetting.labelPosition"
         :model="fieldValues"
-        :rules="mergedSetting.rules"
+        :rules="processedRules"
         :validate-on-rule-change="false"
         ref="formRef"
         :style="formStyle"
       >
         <ctv-form-item
-          v-for="(field, index) in normalizedFields"
+          v-for="(field, index) in visibleFields"
           :key="index"
           :label="field.props.title"
           :prop="field.props?.prop || (Array.isArray(field.field) ? field.field[0] : field.field)"
@@ -59,7 +60,7 @@
             v-if="resolvedButtons.query.visible" 
             type="primary" 
             icon="Search" 
-            :disabled="resolvedButtons.query.disabled"
+            :disabled="resolvedButtons.query.disabled || !isFormValid"
             @click="handleQuery"
         >
           {{ buttonLabels.query }}
@@ -154,10 +155,6 @@ const props = defineProps({
     type: String,
     default: 'right'
   },
-  labelPosition: {
-    type: String,
-    default: 'right'
-  },
   rules: {
     type: Object,
     default: () => ({})
@@ -177,10 +174,45 @@ const mergedSetting = computed(() => {
         buttons: props.buttons && Object.keys(props.buttons).length ? props.buttons : (settings.buttons || {}),
         id: props.id || settings.id,
         labelWidth: props.labelWidth !== 'auto' ? props.labelWidth : (settings.labelWidth || 'auto'),
-        labelWidth: props.labelWidth !== 'auto' ? props.labelWidth : (settings.labelWidth || 'auto'),
         labelPosition: props.labelPosition !== 'right' ? props.labelPosition : (settings.labelPosition || 'right'),
+        collapsible: props.collapsible !== true ? props.collapsible : (settings.collapsible !== undefined ? settings.collapsible : true),
         rules: props.rules && Object.keys(props.rules).length ? props.rules : (settings.rules || {})
     };
+});
+
+/**
+ * 전역 및 로컬 규칙 가공 (message 자동 생성)
+ */
+const processedRules = computed(() => {
+    const rules = mergedSetting.value.rules || {};
+    const fields = mergedSetting.value.fields || [];
+    
+    // 필드 키 -> 타이틀 맵 생성 (메시지 생성용)
+    const titleMap = {};
+    fields.forEach(f => {
+        const title = f.props?.title || f.title;
+        if (title) {
+            const key = f.field;
+            if (Array.isArray(key)) {
+                key.forEach(k => { if(!titleMap[k]) titleMap[k] = title; });
+            } else if (key) {
+                titleMap[key] = title;
+            }
+        }
+    });
+
+    const result = {};
+    Object.keys(rules).forEach(key => {
+        const ruleList = Array.isArray(rules[key]) ? rules[key] : [rules[key]];
+        result[key] = ruleList.map(r => {
+            if (r.required && !r.message) {
+                const title = titleMap[key] || key;
+                return { ...r, message: `${title}은(는) 필수값입니다.` };
+            }
+            return r;
+        });
+    });
+    return result;
 });
 
 const formRef = ref(null);
@@ -203,9 +235,13 @@ onUnmounted(() => {
 
 const responsiveColumns = computed(() => {
     const base = mergedSetting.value.columns;
+    const finalBase = Math.min(5, base); // columns는 최대 5개로 제한
+    
     if (windowWidth.value <= 768) return 1;
-    if (windowWidth.value <= 1400) return Math.max(1, Math.ceil(base / 2));
-    return base;
+    if (windowWidth.value <= 1450) return Math.min(2, finalBase);
+    if (windowWidth.value <= 2100) return Math.min(4, finalBase);
+    
+    return finalBase;
 });
 
 const emit = defineEmits(['update:field', 'query', 'reset']);
@@ -215,34 +251,44 @@ const emit = defineEmits(['update:field', 'query', 'reset']);
  */
 const normalizedFields = computed(() => {
   const fields = mergedSetting.value.fields || [];
-  const rules = mergedSetting.value.rules || {};
+  const rules = processedRules.value;
   
   return fields.map(field => {
-    // 깊은 복사 또는 props 병합
-    const defaultProps = {
-      labelAlign: 'right' // 기본값: 오른쪽 정렬
-    };
-    
-    // Evaluate dynamic props based on current state
+    // 1. 프레임워크 전용 속성 분리
+    const { 
+        component, field: fKey, span, slots, autoLoad, parent, 
+        condition, style, modelValue, props: fieldProps,
+        visible, disabled,
+        ...rest 
+    } = field;
+
+    // 2. 동적 속성 계산
     let extraProps = {};
-    if (typeof field.condition === 'function') {
-        extraProps = field.condition(fieldValues);
+    if (typeof condition === 'function') {
+        extraProps = condition(fieldValues);
     }
     
-    // Check if field is required based on rules
-    let isRequired = false;
+    // 2-1. visible, disabled 처리 (boolean 또는 function)
+    let isVisible = visible !== false;
+    if (typeof visible === 'function') {
+        isVisible = visible(fieldValues);
+    }
     
-    // 1. Check prop.required
-    if (field.props?.required) {
+    let isDisabled = disabled === true;
+    if (typeof disabled === 'function') {
+        isDisabled = disabled(fieldValues);
+    }
+    
+
+    // 3. 필수값 체크 로직 (기존 로직 유지하되 rest 속성도 고려)
+    let isRequired = false;
+    if (fieldProps?.required || rest.required) {
         isRequired = true;
-    } 
-    // 2. Check rules (global or local)
-    else {
-        // Handle array fields (check if any field in the group is required)
-        const fieldNames = Array.isArray(field.field) ? field.field : [field.field];
+    } else {
+        const fieldNames = Array.isArray(fKey || field.field) ? (fKey || field.field) : [(fKey || field.field)];
         
         for (const name of fieldNames) {
-            // Global rules
+            // 전역 규칙
             if (rules[name]) {
                 const ruleList = Array.isArray(rules[name]) ? rules[name] : [rules[name]];
                 if (ruleList.some(r => r.required)) {
@@ -250,9 +296,10 @@ const normalizedFields = computed(() => {
                     break;
                 }
             }
-            // Local rules (prop.rules)
-            if (field.props?.rules) {
-                 const ruleList = Array.isArray(field.props.rules) ? field.props.rules : [field.props.rules];
+            // 개별 필드 레벨 규칙
+            const localRules = fieldProps?.rules || rest.rules;
+            if (localRules) {
+                 const ruleList = Array.isArray(localRules) ? localRules : [localRules];
                  if (ruleList.some(r => r.required)) {
                      isRequired = true;
                      break;
@@ -261,16 +308,109 @@ const normalizedFields = computed(() => {
         }
     }
     
+    // 4. Props 병합 (우선순위: extraProps > fieldProps > rest > default)
+    // 개별 필드 레벨 규칙 가공 (message 자동 생성)
+    const localRules = fieldProps?.rules || rest.rules;
+    let processedLocalRules = localRules;
+    if (localRules) {
+        const ruleList = Array.isArray(localRules) ? localRules : [localRules];
+        const title = fieldProps?.title || rest.title || (Array.isArray(fKey) ? fKey[0] : fKey);
+        processedLocalRules = ruleList.map(r => {
+            if (r.required && !r.message) {
+                return { ...r, message: `${title}은(는) 필수값입니다.` };
+            }
+            return r;
+        });
+    }
+
+    const mergedProps = {
+      labelAlign: 'right', // 기본값
+      ...rest,
+      ...(fieldProps || {}),
+      ...extraProps,
+      required: isRequired,
+      disabled: isDisabled,
+      rules: processedLocalRules
+    };
+
+    // 5. Slots 플랫화 처리
+    let normalizedSlots = undefined;
+    if (slots) {
+        normalizedSlots = {};
+        Object.keys(slots).forEach(key => {
+            const slotItem = slots[key];
+            if (slotItem && typeof slotItem === 'object') {
+                const { component: sComp, field: sField, props: sProps, ...sRest } = slotItem;
+                normalizedSlots[key] = {
+                    ...slotItem,
+                    props: {
+                        ...(sRest || {}),
+                        ...(sProps || {})
+                    }
+                };
+            } else {
+                normalizedSlots[key] = slotItem;
+            }
+        });
+    }
+
     return {
       ...field,
-      props: {
-        ...defaultProps,
-        ...(field.props || {}),
-        ...extraProps,
-        required: isRequired
-      }
+      props: mergedProps,
+      visible: isVisible,
+      slots: normalizedSlots
     };
   });
+});
+
+const isExpanded = ref(false);
+
+const layoutInfo = computed(() => {
+    const cols = responsiveColumns.value;
+    const allFields = normalizedFields.value;
+    const fields = allFields.filter(f => f.visible !== false);
+    
+    let currentRow = 1;
+    let currentSpanSum = 0;
+    
+    // 각 필드의 row 할당 계산
+    const rowAssignments = fields.map(field => {
+        const span = field.span || 1;
+        const actualSpan = Math.min(span, cols);
+        
+        if (currentSpanSum + actualSpan > cols) {
+            currentRow++;
+            currentSpanSum = actualSpan;
+        } else {
+            currentSpanSum += actualSpan;
+        }
+        return currentRow;
+    });
+    
+    // 화면에 3줄 이상이면 collapsible 버튼 활성화
+    const isCollapsibleActive = mergedSetting.value.collapsible && currentRow >= 3;
+    
+    return {
+        totalRows: currentRow,
+        isCollapsibleActive,
+        rowAssignments
+    };
+});
+
+// 화면에 보일 실제 필드
+const visibleFields = computed(() => {
+    // 1. visible 속성이 false인 필드 1차 필터링
+    const activeFields = normalizedFields.value.filter(f => f.visible !== false);
+    
+    // 2. 접힘(collapsible) 상태에 따른 2차 필터링
+    if (!layoutInfo.value.isCollapsibleActive || isExpanded.value) {
+        return activeFields; // 전체 표시
+    }
+    
+    // 접힌 상태 (currentRow = 1 인 것만 표시)
+    return activeFields.filter((field, index) => {
+        return layoutInfo.value.rowAssignments[index] === 1;
+    });
 });
 
 /**
@@ -318,7 +458,7 @@ const getDefaultValue = (field) => {
  * 필드 값 초기화
  */
  const initializeFieldValues = () => {
-  const fields = mergedSetting.value.fields || [];
+  const fields = normalizedFields.value;
   
   const initField = (item) => {
       // 1. 메인 필드 초기화
@@ -400,6 +540,51 @@ const getModelValue = (field) => {
 };
 
 /**
+ * 실시간 폼 유효성 체크 computed (조회 버튼 비활성화 용도)
+ */
+const isFormValid = computed(() => {
+    let valid = true;
+    const rules = processedRules.value;
+    
+    // 1. 전역 rules 검사
+    Object.keys(rules).forEach(field => {
+        const ruleArray = Array.isArray(rules[field]) ? rules[field] : [rules[field]];
+        const value = fieldValues[field];
+        
+        ruleArray.forEach(rule => {
+             // 필수값 체크
+             if (rule.required && (value === undefined || value === null || value === '')) {
+                 valid = false;
+             }
+             // 정규식 체크
+             if (rule.pattern && value) {
+                 const regex = new RegExp(rule.pattern);
+                 if (!regex.test(value)) {
+                     valid = false;
+                 }
+             }
+        });
+    });
+    
+    // 2. 개별 필드 레벨의 required 속성 검사
+    normalizedFields.value.forEach(field => {
+         if (field.visible === false) return; // 숨겨진 필드는 검사 제외
+         
+         const isRequired = field.props?.required;
+         const val = getModelValue(field);
+         if (isRequired) {
+             if (Array.isArray(val)) {
+                 if (val.length === 0) valid = false;
+             } else if (val === undefined || val === null || val === '') {
+                 valid = false;
+             }
+         }
+    });
+
+    return valid;
+});
+
+/**
  * 필드 값 업데이트 처리
  */
 const handleUpdate = (field, value) => {
@@ -432,7 +617,17 @@ const handleUpdate = (field, value) => {
 /**
  * 조회 버튼 클릭 처리
  */
-const handleQuery = () => {
+const handleQuery = async () => {
+  // 실제 조회 진입 전, 폼 전체 유효성 검사 실행 (실패 시 에러 메시지 표시 및 리턴)
+  if (formRef.value) {
+    try {
+      await formRef.value.validate();
+    } catch (error) {
+       console.warn('[CtvQueryFilter] Validation failed', error);
+       return;
+    }
+  }
+
   // target이 지정된 경우
   if (mergedSetting.value.target) {
     let targetComponent = componentRegistry.get(mergedSetting.value.target);
@@ -461,7 +656,7 @@ const handleQuery = () => {
  */
 const handleReset = () => {
   // 모든 필드를 초기값으로 리셋
-  const fields = mergedSetting.value.fields || [];
+  const fields = normalizedFields.value;
   fields.forEach(field => {
     const defaultValue = getDefaultValue(field);
     
