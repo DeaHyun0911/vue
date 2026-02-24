@@ -14,6 +14,23 @@
       :rules="rules"
       :style="gridStyle"
     >
+      <!-- 선언적 필드 렌더링 (CtvQueryFilter 스타일) -->
+      <template v-for="(fieldDef, idx) in resolvedFields" :key="fieldDef.field || idx">
+        <ctv-form-item 
+          :label="fieldDef.title || fieldDef.label" 
+          :prop="fieldDef.field"
+          :span="fieldDef.span"
+          v-if="fieldDef.visible !== false"
+        >
+          <component 
+            :is="fieldDef.component" 
+            v-bind="fieldDef"
+            :field="fieldDef.field"
+          />
+        </ctv-form-item>
+      </template>
+
+      <!-- 직접 작성하는 Slot -->
       <slot />
     </el-form>
   </div>
@@ -47,7 +64,34 @@ const props = defineProps({
   rules: {
     type: Object,
     default: () => ({})
+  },
+  /**
+   * 선언적 필드 설정
+   * Array: [{ component: 'ctv-input', field: 'NAME', title: '성명' }, ...]
+   * Object (필드 중심): { NAME: { component: 'ctv-input', title: '성명' }, ... }
+   */
+  fields: {
+    type: [Array, Object],
+    default: () => []
   }
+});
+
+const resolvedFields = computed(() => {
+  if (Array.isArray(props.fields)) {
+    return props.fields;
+  }
+  
+  // Object 형식인 경우 Array로 변환 (Key를 field로 사용)
+  if (props.fields && typeof props.fields === 'object') {
+    return Object.entries(props.fields).map(([key, value]) => {
+      return {
+        field: key,
+        ...value
+      };
+    });
+  }
+  
+  return [];
 });
 
 import { provide, toRef, reactive } from 'vue';

@@ -3,8 +3,42 @@ import { ref } from 'vue';
 export const activeGridId = ref('');
 
 /**
+ * 콤보 문자열 배열을 파싱하여 콤보 데이터 배열로 변환
+ * 레거시 fnCreateGridCombo의 로직을 그대로 추출하되, gGridComboData에 할당하지 않고 순수하게 반환만 함
+ * @param {string[]} rvComboList - "value;label[;pcode]|#value;label..." 형식의 문자열 배열
+ * @returns {Array[]} 파싱된 콤보 데이터 배열 (각 항목은 { value, label, pcode? } 객체의 배열)
+ */
+export function parseComboList(rvComboList) {
+    const aGridComboData = [];
+    const len = rvComboList.length;
+
+    for (let iLoop = 0; iLoop < len; iLoop++) {
+        const aComboA = rvComboList[iLoop].split("|#");
+        const aGridComboA = [];
+
+        for (let kLoop = 0; kLoop < aComboA.length; kLoop++) {
+            if (aComboA[kLoop] !== "") {
+                const aComboB = aComboA[kLoop].split(";");
+                const aGridData = {
+                    value: aComboB[0],
+                    label: aComboB[1],
+                };
+                // 부모 콤보 value (pcode) 처리
+                if (aComboB.length === 3 && aComboB[2]) {
+                    aGridData.pcode = aComboB[2];
+                }
+                aGridComboA.push(aGridData);
+            }
+        }
+        aGridComboData.push(aGridComboA);
+    }
+
+    return aGridComboData;
+}
+
+/**
  * 전역 콤보 데이터 로드 함수
- * 페이지에서 사용할 모든 콤보 데이터를 한 번에 로드하여 gGridComboData 생성
+ * 페이지에서 사용할 모든 콤보 데이터를 한 번에 로드하여 파싱된 배열 반환
  * @param {Array} cParam - 콤보 CODE 배열
  * @returns {Promise<Array|null>} 콤보 데이터 배열 또는 null
  */
@@ -17,8 +51,6 @@ export async function loadComboData(cParam) {
     /* eslint-disable no-undef */
     const bParam = [top.gSInfo[DIVCOD], top.gSInfo[ERPSDB]];
     const dParam = "";
-
-    let comboData = null;
 
     try {
         const rjSon = await ufnXhrDotNetCombo2(
@@ -41,13 +73,8 @@ export async function loadComboData(cParam) {
             // 하위 호환성: 전역변수 설정 (기존 코드 지원)
             window._filterCombo = comboArray;
 
-            // 레거시 방식: gGridComboData 생성
-            if (typeof fnCreateGridCombo === "function") {
-                comboData = fnCreateGridCombo(comboArray);
-            }
-
-            // ✅ 콤보 데이터 반환
-            return comboData;
+            // gGridComboData 전역 변수 없이 순수 파싱 결과만 반환
+            return parseComboList(comboArray);
         }
 
         return null;
@@ -139,12 +166,21 @@ export async function dataQuery(config) {
         }
 
         // 결과 데이터 중 rsDataXX 형식의 JSON 문자열은 객체로 자동 파싱
+        // 빈 문자열("")은 빈 배열([])로 처리 (데이터 없음 의미)
         Object.keys(result).forEach(key => {
             if (key.startsWith('rsData') && typeof result[key] === 'string') {
-                try {
-                    result[key] = JSON.parse(result[key]);
-                } catch (e) {
-                    // JSON 파싱 실패 시 원본 문자열 유지
+                const raw = result[key];
+                if (!raw || raw.trim() === '') {
+                    // 빈 문자열 → 빈 배열로 정규화 (그리드 클리어 보장)
+                    result[key] = [];
+                } else {
+                    try {
+                        result[key] = JSON.parse(raw);
+                    } catch (e) {
+                        // JSON 파싱 실패 시 빈 배열로 대체 (원본 문자열이 비정상)
+                        console.warn(`[CtvCommon] ${key} JSON 파싱 실패, 빈 배열로 처리:`, raw.substring(0, 50));
+                        result[key] = [];
+                    }
                 }
             }
         });

@@ -12,6 +12,10 @@
       <el-main>
         <slot></slot>
       </el-main>
+
+      <el-aside v-if="$slots['right-aside']" :width="rightAsideWidth">
+        <slot name="right-aside"></slot>
+      </el-aside>
     </el-container>
     
     <el-footer v-if="$slots.footer" :height="footerHeight">
@@ -35,6 +39,10 @@ defineProps({
     default: '60px'
   },
   asideWidth: {
+    type: String,
+    default: '300px'
+  },
+  rightAsideWidth: {
     type: String,
     default: '300px'
   },

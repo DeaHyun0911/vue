@@ -73,8 +73,18 @@
         >
           {{ buttonLabels.reset }}
         </ctv-button>
+
+        <!-- 사용자 정의 버튼 (설정 기반) -->
+        <ctv-button 
+            v-for="(btn, i) in mergedSetting.customButtons"
+            :key="i"
+            v-bind="btn"
+            @click="typeof btn.action === 'function' ? btn.action($event) : undefined"
+        >
+          {{ btn.label }}
+        </ctv-button>
         
-        <!-- 사용자 정의 버튼 slot -->
+        <!-- 사용자 정의 버튼 (직접 Slot) -->
         <slot name="buttons"></slot>
       </div>
     </div>
@@ -84,6 +94,7 @@
 <script setup>
 import { reactive, computed, watch, onMounted, nextTick, ref, onUnmounted } from 'vue';
 import componentRegistry from '../utils/componentRegistry.js';
+import { resolveTarget } from '../utils/actionUtils.js';
 
 const props = defineProps({
   /**
@@ -102,14 +113,15 @@ const props = defineProps({
     default: () => []
   },
   /**
-   * 타겟 컴포넌트 ID (단일)
+   * 타겟 컴포넌트 ID (단일 컴포넌트 또는 그룹 모두 지원)
+   * CtvToolBox와 동일하게 target 하나로 통일
    */
   target: {
     type: String,
     default: null
   },
   /**
-   * 타겟 컴포넌트 그룹 ID (다수)
+   * @deprecated target으로 통합. 하위 호환성을 위해 유지.
    */
   group: {
     type: String,
@@ -159,6 +171,10 @@ const props = defineProps({
     type: Object,
     default: () => ({})
   },
+  customButtons: {
+    type: Array,
+    default: () => []
+  },
   setting: { type: Object, default: null }
 });
 
@@ -167,8 +183,7 @@ const mergedSetting = computed(() => {
     return {
         columns: props.columns !== 12 ? props.columns : (settings.columns || 12),
         fields: (props.fields && props.fields.length) ? props.fields : (settings.fields || []),
-        target: props.target || settings.target,
-        group: props.group || settings.group,
+        target: props.target || settings.target || props.group || settings.group,
         showButtons: props.showButtons !== true ? props.showButtons : (settings.showButtons !== undefined ? settings.showButtons : true),
         buttonLabels: props.buttonLabels && Object.keys(props.buttonLabels).length !== 2 ? props.buttonLabels : (settings.buttonLabels || { query: '조회', reset: '초기화' }),
         buttons: props.buttons && Object.keys(props.buttons).length ? props.buttons : (settings.buttons || {}),
@@ -176,7 +191,8 @@ const mergedSetting = computed(() => {
         labelWidth: props.labelWidth !== 'auto' ? props.labelWidth : (settings.labelWidth || 'auto'),
         labelPosition: props.labelPosition !== 'right' ? props.labelPosition : (settings.labelPosition || 'right'),
         collapsible: props.collapsible !== true ? props.collapsible : (settings.collapsible !== undefined ? settings.collapsible : true),
-        rules: props.rules && Object.keys(props.rules).length ? props.rules : (settings.rules || {})
+        rules: props.rules && Object.keys(props.rules).length ? props.rules : (settings.rules || {}),
+        customButtons: (props.customButtons && props.customButtons.length) ? props.customButtons : (settings.customButtons || [])
     };
 });
 
@@ -414,7 +430,7 @@ const visibleFields = computed(() => {
 });
 
 /**
- * 버튼 설정 정규화
+ * 버튼 설정 정규화 (함수형 조건 처리 추가)
  */
 const resolvedButtons = computed(() => {
     const defaults = {
@@ -423,10 +439,27 @@ const resolvedButtons = computed(() => {
     };
 
     const userConfig = mergedSetting.value.buttons || {};
+    const values = fieldValues; // 현재 필드 값들
+
+    const resolve = (btnConfig, def) => {
+        const config = { ...def, ...(btnConfig || {}) };
+        
+        // visible 처리
+        if (typeof config.visible === 'function') {
+            config.visible = config.visible(values);
+        }
+        
+        // disabled 처리
+        if (typeof config.disabled === 'function') {
+            config.disabled = config.disabled(values);
+        }
+        
+        return config;
+    };
 
     return {
-        query: { ...defaults.query, ...(userConfig.query || {}) },
-        reset: { ...defaults.reset, ...(userConfig.reset || {}) }
+        query: resolve(userConfig.query, defaults.query),
+        reset: resolve(userConfig.reset, defaults.reset)
     };
 });
 
@@ -628,22 +661,12 @@ const handleQuery = async () => {
     }
   }
 
-  // target이 지정된 경우
-  if (mergedSetting.value.target) {
-    let targetComponent = componentRegistry.get(mergedSetting.value.target);
-    if (!targetComponent) {
-      targetComponent = componentRegistry.getActive(mergedSetting.value.target);
-    }
+  // target이 지정된 경우 (단일 컴포넌트 또는 그룹 모두 resolveTarget이 처리)
+  const targetId = mergedSetting.value.target;
+  if (targetId) {
+    const targetComponent = resolveTarget(targetId);
     if (targetComponent?.query) {
       targetComponent.query();
-    }
-  }
-  
-  // group이 지정된 경우 (활성 컴포넌트만 동작)
-  if (mergedSetting.value.group) {
-    const activeComp = componentRegistry.getActive(mergedSetting.value.group);
-    if (activeComp && activeComp.query) {
-        activeComp.query();
     }
   }
   
@@ -668,21 +691,11 @@ const handleReset = () => {
   });
 
   // target이 지정된 경우
-  if (mergedSetting.value.target) {
-    let targetComponent = componentRegistry.get(mergedSetting.value.target);
-    if (!targetComponent) {
-      targetComponent = componentRegistry.getActive(mergedSetting.value.target);
-    }
+  const targetId = mergedSetting.value.target;
+  if (targetId) {
+    const targetComponent = resolveTarget(targetId);
     if (targetComponent?.reset) {
       targetComponent.reset();
-    }
-  }
-  
-  // group이 지정된 경우
-  if (mergedSetting.value.group) {
-    const activeComp = componentRegistry.getActive(mergedSetting.value.group);
-    if (activeComp && activeComp.reset) {
-        activeComp.reset();
     }
   }
   
@@ -727,27 +740,6 @@ defineExpose({
 </script>
 
 <style scoped>
-.ctv-query-filter {
-  width: 100%;
-  padding: 16px;
-  background: #fff;
-  border-radius: 4px;
-  box-sizing: border-box;
-}
-
-.filter-container {
-  display: flex;
-  gap: 16px;
-  align-items: flex-start;
-  width: 100%;
-}
-
-
-
-.button-group {
-  display: flex;
-  flex-shrink: 0;
-}
 
 /* 반응형 처리 */
 @media (max-width: 768px) {

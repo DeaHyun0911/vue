@@ -7,6 +7,8 @@
           :type="btn.type" 
           :icon="btn.icon" 
           :disabled="typeof btn.disabled === 'function' ? btn.disabled() : btn.disabled"
+          :tooltip="btn.tooltip"
+          :tooltip-placement="btn.tooltipPlacement"
           @click="handleAction(btn)"
         >
           {{ btn.label }}
@@ -22,6 +24,8 @@
           :type="btn.type" 
           :icon="btn.icon" 
           :disabled="typeof btn.disabled === 'function' ? btn.disabled() : btn.disabled"
+          :tooltip="btn.tooltip"
+          :tooltip-placement="btn.tooltipPlacement"
           @click="handleAction(btn)"
         >
           {{ btn.label }}
@@ -40,8 +44,10 @@
 </template>
 
 <script setup>
-import { computed } from 'vue';
+import { computed, ref, onMounted, onBeforeUnmount } from 'vue';
+import { ElMessageBox } from 'element-plus';
 import componentRegistry from '../utils/componentRegistry.js';
+import { executeAction, resolveAutoDisabled, resolveTarget } from '../utils/actionUtils.js';
 
 const props = defineProps({
   target: { type: String, default: null },
@@ -62,10 +68,8 @@ const mergedSetting = computed(() => {
     };
 });
 
+// ─── target 인스턴스 추적 ───────────────────────────────────
 const targetInstance = ref(null);
-
-import { onMounted, onBeforeUnmount, ref } from 'vue';
-
 let pollTimer = null;
 
 onMounted(() => {
@@ -74,37 +78,24 @@ onMounted(() => {
         let isSubscribed = false;
 
         const findTarget = () => {
-             // 1. Try to get as specific component
-             let instance = componentRegistry.get(targetId);
-             
-             // 2. If not found, try as group active component
-             if (!instance) {
-                 instance = componentRegistry.getActive(targetId); 
-                 
-                 // If it is a group, subscribe to changes (only once)
-                 if (!isSubscribed) {
-                     // Check if it looks like a group (has members or is active)
-                     // Or just blindly subscribe if it's the targetId
-                     componentRegistry.subscribe(targetId, (activeId) => {
-                         targetInstance.value = componentRegistry.get(activeId);
-                     });
-                     isSubscribed = true;
-                 }
-             }
-             
-             if (instance) {
-                 targetInstance.value = instance;
-                 if (pollTimer) clearInterval(pollTimer);
-             }
+            const instance = resolveTarget(targetId);
+            if (instance) {
+                targetInstance.value = instance;
+                if (pollTimer) clearInterval(pollTimer);
+            }
         };
-        
+
+        if (!isSubscribed) {
+            componentRegistry.subscribe?.(targetId, (activeId) => {
+                targetInstance.value = resolveTarget(activeId);
+            });
+            isSubscribed = true;
+        }
+
         findTarget();
         if (!targetInstance.value) {
             pollTimer = setInterval(findTarget, 200);
-            // 5초 후 중단
-            setTimeout(() => {
-                if (pollTimer) clearInterval(pollTimer);
-            }, 5000);
+            setTimeout(() => { if (pollTimer) clearInterval(pollTimer); }, 5000);
         }
     }
 });
@@ -113,218 +104,69 @@ onBeforeUnmount(() => {
     if (pollTimer) clearInterval(pollTimer);
 });
 
+// ─── 기본 버튼 정의 ──────────────────────────────────────────
 const defaultButtons = {
-  append: { id: 'append', label: '추가', action: 'append', icon: 'Plus' },
-  delete: { id: 'delete', label: '삭제', action: 'delete', icon: 'Minus', plain: true },
-  save: { id: 'save', label: '저장', action: 'save', icon: 'Check', type: 'primary' },
-  excel: { id: 'excel', action: 'excel', icon: 'Download', plain: true },
-  print: { id: 'print', action: 'print', icon: 'Printer' },
-  excelImport: { id: 'excelImport', label: '엑셀일괄등록', action: 'excelImport', icon: 'Upload' }
+  append:      { id: 'append',      label: '추가',         action: 'append',      icon: 'Plus' },
+  delete:      { id: 'delete',      label: '삭제',         action: 'delete',      icon: 'Minus', plain: true },
+  save:        { id: 'save',        label: '저장',         action: 'save',        icon: 'Check', type: 'primary' },
+  excel:       { id: 'excel',       label: '엑셀',         action: 'excel',       icon: 'Download', plain: true },
+  print:       { id: 'print',       label: '인쇄',         action: 'print',       icon: 'Printer' },
+  excelImport: { id: 'excelImport', label: '엑셀일괄등록', action: 'excelImport', icon: 'Upload' },
 };
 
+// ─── 버튼 목록 정규화 + autoDisable 적용 ─────────────────────
 const resolveButtons = (list) => {
   return list.map(item => {
+    let btn;
+
     if (typeof item === 'string') {
-      const btn = defaultButtons[item] ? { ...defaultButtons[item] } : { id: item, label: item, action: item };
-      
-      if (btn.action === 'save') {
-           if (targetInstance.value && typeof targetInstance.value.hasChanges !== 'undefined') {
-               btn.disabled = !targetInstance.value.hasChanges;
-           }
-      }
-
-      // append 버튼 상태 처리 (문자열)
-      if (btn.action === 'append') {
-           if (targetInstance.value && typeof targetInstance.value.isLoaded !== 'undefined') {
-               btn.disabled = !targetInstance.value.isLoaded;
-           }
-      }
-
-      // delete 버튼 상태 처리 (문자열)
-      if (btn.action === 'delete') {
-           if (targetInstance.value) {
-               const isLoaded = targetInstance.value.isLoaded;
-               const hasRows = targetInstance.value.totalRows > 0;
-               const hasSelection = targetInstance.value.selectedRowIdx !== -1;
-               btn.disabled = !(isLoaded && hasRows && hasSelection);
-           }
-      }
-      return btn;
-    } else if (typeof item === 'object') {
-        // Merge with default if id/action/tool matches
+        btn = defaultButtons[item] ? { ...defaultButtons[item] } : { id: item, label: item, action: item };
+    } else {
         const key = item.id || item.action || item.tool;
-        let btn = { ...item };
-
-        if (key && defaultButtons[key]) {
-            btn = { ...defaultButtons[key], ...item };
-            if (!btn.action) btn.action = defaultButtons[key].action;
-        }
-        
-        // save 버튼 상태 처리
-        if (btn.action === 'save') {
-             if (targetInstance.value && typeof targetInstance.value.hasChanges !== 'undefined') {
-                 if (typeof item.disabled === 'undefined') {
-                      btn.disabled = !targetInstance.value.hasChanges;
-                 }
-             }
-        }
-        
-        // append 버튼 상태 처리
-        if (btn.action === 'append') {
-             if (targetInstance.value) {
-                 // 데이터 조회 여부 (isLoaded)
-                 if (typeof targetInstance.value.isLoaded !== 'undefined') {
-                     if (typeof item.disabled === 'undefined') {
-                         btn.disabled = !targetInstance.value.isLoaded;
-                     }
-                 }
-             }
-        }
-
-        // delete 버튼 상태 처리
-        if (btn.action === 'delete') {
-             if (targetInstance.value) {
-                 if (typeof item.disabled === 'undefined') {
-                     // 조회 되었고(isLoaded), 데이터가 있고(totalRows > 0), 선택된 행이 있어야 함(selectedRowIdx != -1)
-                     const isLoaded = targetInstance.value.isLoaded;
-                     const hasRows = targetInstance.value.totalRows > 0;
-                     const hasSelection = targetInstance.value.selectedRowIdx !== -1;
-                     
-                     btn.disabled = !(isLoaded && hasRows && hasSelection);
-                 }
-             }
-        }
-        
-        return btn;
+        btn = key && defaultButtons[key] ? { ...defaultButtons[key], ...item } : { ...item };
+        if (!btn.action && key) btn.action = key;
     }
-    return item;
+
+    // 사용자가 직접 disabled를 지정하지 않은 경우에만 자동 결정
+    if (btn.action && !Object.prototype.hasOwnProperty.call(item, 'disabled')) {
+        const autoVal = resolveAutoDisabled(btn.action, targetInstance.value);
+        if (autoVal !== false || ['save', 'append', 'delete'].includes(btn.action)) {
+            btn.disabled = autoVal;
+        }
+    }
+
+    return btn;
   });
 };
 
-const resolvedLeftButtons = computed(() => resolveButtons(mergedSetting.value.left));
+const resolvedLeftButtons  = computed(() => resolveButtons(mergedSetting.value.left));
 const resolvedRightButtons = computed(() => resolveButtons(mergedSetting.value.right));
 
-import { ElMessageBox } from 'element-plus';
-
+// ─── 액션 핸들러 (actionUtils 공통 함수 위임) ─────────────────
 const handleAction = async (btn) => {
-  // 1. target 컴포넌트 찾기
-  let targetComponent = null;
-  const targetId = mergedSetting.value.target;
-  
-  if (targetId) {
-      // 1. ID로 직접 찾기
-      targetComponent = componentRegistry.get(targetId);
-      
-      // 2. ID로 못 찾으면 그룹으로 간주하고 활성 컴포넌트 찾기
-      if (!targetComponent) {
-          targetComponent = componentRegistry.getActive(targetId);
-      }
-  }
-
-  if (!targetComponent) {
-      console.warn(`[CtvToolBox] Target '${targetId}' not found (tried as ID and Group).`);
+  if (btn.action === 'excelImport') {
+      excelUploadVisible.value = true;
       return;
   }
 
-  // 2. DataGrid 메서드 호출
-  const grid = targetComponent.datagrid?.grid;
-  const action = btn.action;
-  
-  if (action === 'append') {
-if (targetComponent.addRow) {
-          targetComponent.addRow();
-      }
-  } else if (action === 'delete') {
-      // SBGrid3 삭제 로직 상세 구현
-      if (typeof SBGrid3 !== 'undefined' && grid) {
-          const selectedKey = SBGrid3.getFocusedKey(grid);
-          const rowItem = SBGrid3.getFocusedRow(grid);
-
-          if (!rowItem) {
-              if (top.SetMessage) top.SetMessage("삭제할 행을 선택하세요.");
-              else alert("삭제할 행을 선택하세요.");
-              return;
-          }
-
-          // 신규 입력(insert) 상태가 아니면 삭제 확인
-          if (rowItem.status !== "insert") {
-               try {
-                   await ElMessageBox.confirm(
-                       '현재(선택)행을 삭제합니다.\n삭제(→저장)를 하시면 데이터가 완전하게 삭제됩니다.\n삭제하시겠습니까?',
-                       '삭제 확인',
-                       {
-                           confirmButtonText: '확인',
-                           cancelButtonText: '취소',
-                       }
-                   );
-               } catch (e) {
-                   // 취소 시 중단
-                   return;
-               }
-          }
-
-          // 다음 포커스 이동을 위한 준비 (선택적)
-          const currRowIndex = typeof rowItem._rowIndex !== 'undefined' ? rowItem._rowIndex : -1;
-          const nextRow = currRowIndex > 0 ? SBGrid3.getRowByIndex(grid, currRowIndex - 1) : null;
-          const column = SBGrid3.getFocusedColumn(grid);
-
-          if (selectedKey && selectedKey.length > 0) {
-              SBGrid3.deleteRow(grid, selectedKey);
-              
-               // 포커스 이동
-              if (nextRow && column) {
-                  SBGrid3.moveFocus(grid, nextRow, column);
-              }
-          } else {
-               if (top.SetMessage) top.SetMessage("삭제할 행을 선택하세요.");
-               else alert("삭제할 행을 선택하세요.");
-          }
-
-      } else if (targetComponent.deleteRow) {
-          targetComponent.deleteRow();
-      }
-  } else if (action === 'save') {
-      if (typeof targetComponent.save === 'function') {
-          await targetComponent.save();
-      } else {
-          console.warn(`[CtvToolBox] Target component '${mergedSetting.value.target}' does not support save.`);
-      }
-  } else if (action === 'excelImport') {
-      excelUploadVisible.value = true;
-  } else if (action === 'excel') {
-      if (typeof SBGrid3 !== 'undefined' && grid) {
-          SBGrid3.excelExport(grid);
-      } else if (targetComponent.exportExcel) {
-          targetComponent.exportExcel();
-      }
-  } else if (typeof targetComponent[action] === 'function') {
-      // 일반적인 메서드 호출
-      targetComponent[action]();
-  } else {
-      // 지정된 action이 target 컴포넌트에 없으면 이벤트를 상위로 올려보냄
-      emit('action', action, targetComponent);
-  }
+  await executeAction(btn.action, mergedSetting.value.target, {
+    onUnknownAction: (action, comp) => emit('action', action, comp)
+  });
 };
 
-// --- 내장 엑셀 업로드 처리 로직 ---
+// ─── 내장 엑셀 업로드 처리 ────────────────────────────────────
 const excelUploadVisible = ref(false);
-const isExcelUploading = ref(false);
+const isExcelUploading   = ref(false);
 
-const excelSampleName = computed(() => {
-    return mergedSetting.value.excelImportConfig?.sampleName || '';
-});
+const excelSampleName = computed(() => mergedSetting.value.excelImportConfig?.sampleName || '');
 
 const handleExcelUpload = async (file) => {
     if (!file) return;
 
-    let targetComponent = null;
-    const targetId = mergedSetting.value.target;
-    if (targetId) {
-        targetComponent = componentRegistry.get(targetId) || componentRegistry.getActive(targetId);
-    }
+    const targetComponent = resolveTarget(mergedSetting.value.target);
 
     if (!targetComponent || typeof targetComponent.importFromExcel !== 'function') {
-        if(window.Ctv && window.Ctv.ctvAlert) {
+        if (window.Ctv?.ctvAlert) {
             window.Ctv.ctvAlert('이 기능을 지원하지 않는 그리드이거나 타겟을 찾을 수 없습니다.', '오류');
         } else {
             ElMessageBox.alert('이 기능을 지원하지 않는 대상입니다.', '오류', { type: 'error' });
@@ -335,16 +177,16 @@ const handleExcelUpload = async (file) => {
     isExcelUploading.value = true;
     try {
         await targetComponent.importFromExcel(file, mergedSetting.value.excelImportConfig || {});
-        
-        if (window.Ctv && window.Ctv.ctvAlert) {
+
+        if (window.Ctv?.ctvAlert) {
             window.Ctv.ctvAlert('엑셀 데이터를 성공적으로 불러왔습니다.<br>데이터를 확인하시고 <b>저장</b> 버튼을 클릭하여 반영해주세요.', '알림');
         } else {
             ElMessageBox.alert('엑셀 데이터를 성공적으로 불러왔습니다.', '알림', { type: 'success' });
         }
         excelUploadVisible.value = false;
     } catch (error) {
-        console.error("엑셀 업로드 오류:", error);
-        if (window.Ctv && window.Ctv.ctvAlert) {
+        console.error('엑셀 업로드 오류:', error);
+        if (window.Ctv?.ctvAlert) {
             window.Ctv.ctvAlert(`엑셀 임포트 중 오류가 발생했습니다.<br>${error.message || ''}`, '오류');
         } else {
             ElMessageBox.alert(`오류가 발생했습니다.<br>${error.message}`, '오류', { type: 'error', dangerouslyUseHTMLString: true });
@@ -353,20 +195,4 @@ const handleExcelUpload = async (file) => {
         isExcelUploading.value = false;
     }
 };
-// ------------------------------------
-
 </script>
-
-<style scoped>
-.ctv-tool-box {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 8px;
-}
-
-.left-tools, .right-tools {
-  display: flex;
-  align-items: center;
-}
-</style>

@@ -17,7 +17,8 @@ import {
   applyColTypeToColumns,
   applyLockTypeToColumns,
   applyDefaultUnitToColumns,
-  parseTreeColumns
+  parseTreeColumns,
+  _getEditable
 } from '../utils/gridUtils.js';
 import { activeGridId } from '../utils/common.js';
 import componentRegistry from '../utils/componentRegistry.js';
@@ -122,6 +123,7 @@ const props = defineProps({
 const gridContainer = ref(null);
 const hasChanges = ref(false); // 변경 상태 추적
 const datagrid = reactive({ grid: null });
+const sbgrid = computed(() => datagrid.grid);
 
 /**
  * Props와 Setting 병합된 최종 설정
@@ -129,8 +131,8 @@ const datagrid = reactive({ grid: null });
 const mergedSetting = computed(() => {
   const settings = props.setting || {};
   
-  // 전역 gMenuTabinfo.insauth 권한이 "2"(저장권한)일 경우 기본 editable true 지정 (없으면 false)
-  const defaultEditable = gMenuTabinfo && gMenuTabinfo.insauth === "2";
+  // 공통 권한 체크 함수 사용
+  const defaultEditable = _getEditable();
 
   return {
     gridConfig: props.gridConfig || settings.gridConfig,
@@ -313,14 +315,25 @@ const computedGridConfig = computed(() => {
 
     // 콤보 로딩 상태 자동 체크 (깜빡임 방지)
     // inputCombo나 combo 속성에 배열이 지정되어 있는데, 아직 __loaded 플래그가 없고 비어있다면 대기
-    if (config.columns && Array.isArray(config.columns)) {
-        for (const col of config.columns) {
+    // 중첩된 그룹 columns(예: '대상자' 안의 하위 컬럼들)도 재귀적으로 검사
+    const hasUnloadedCombo = (cols) => {
+        if (!Array.isArray(cols)) return false;
+        for (const col of cols) {
             const combo = col.inputCombo || col.combo;
-
             if (Array.isArray(combo) && combo.length === 0 && !combo.__loaded) {
-                return null;
+                return true;
             }
+            // 중첩된 columns가 있으면 재귀 탐색
+            if (col.columns && Array.isArray(col.columns) && col.columns.length > 0) {
+                if (hasUnloadedCombo(col.columns)) return true;
+            }
+        }
+        return false;
+    };
 
+    if (config.columns && Array.isArray(config.columns)) {
+        if (hasUnloadedCombo(config.columns)) {
+            return null;
         }
     }
 
@@ -518,6 +531,8 @@ const createGrid = async () => {
     datagrid.grid = gridInstance;
     state.datagrid = gridInstance;
 
+    SBGrid3.LogLevel = 4;
+
     // ===== 변경 감지 이벤트 등록 =====
     SBGrid3.setDoCommand(datagrid.grid, 'updated', (grid, command) => {
         updateChangeStatus();
@@ -704,9 +719,14 @@ async function query(ignoreChanges = false) {
       ]
     });
 
-    // 데이터 설정
-    if (data && data[dataPath]) {
+    // 데이터 설정: data[dataPath]가 undefined/null이 아니면 항상 setData 호출
+    // (빈 배열 []도 정상적인 '데이터 없음' 결과이므로 반드시 setData로 그리드를 클리어해야 함)
+    if (data && data[dataPath] !== undefined && data[dataPath] !== null) {
       await setData(data[dataPath]);
+    } else if (data) {
+      // dataPath 키가 응답에 존재하지 않는 경우 빈 배열로 클리어
+      console.warn(`[CtvDataGrid] dataPath '${dataPath}' 가 응답에 없습니다. 그리드를 클리어합니다.`);
+      await setData([]);
     }
   } catch (error) {
     console.error('[CtvDataGrid] 조회 오류:', error);
@@ -948,21 +968,17 @@ async function save(reload = true) {
   const reloadAfterSave = (saveConfig.reloadAfterSave ?? true) && reload;
 
   try {
+      let failedData = { key: undefined, column: undefined };
+
       // 1. 유효성 검사
-      const failedData = SBGrid3.findInvalid(datagrid.grid);
+      failedData = SBGrid3.findInvalid(datagrid.grid, failedData.key, failedData.column);
+      
       if (failedData?.rowItem !== undefined && failedData?.column !== undefined) {
           const msg = "필수 항목이 누락되었거나 형식이 맞지 않습니다. \n 수정한 뒤 다시 저장해 주세요.";
-          
-          if (typeof top.CtvModal?.alert === 'function') {
-              await top.CtvModal.alert(msg, "검증 실패");
-          } else {
-              await ElMessageBox.alert(msg, '검증 실패', { type: 'warning' });
-          }
+          await ElMessageBox.alert(msg, '검증 실패', { type: 'warning' });
 
           SBGrid3.moveFocus(datagrid.grid, failedData.rowItem, failedData.column);
-          // SBGrid3.columnEditable missing in doc? Legacy code used it.
-          // Assuming it puts cell in edit mode
-          if (SBGrid3.columnEditable) SBGrid3.columnEditable(datagrid.grid, failedData.key, failedData.column);
+          SBGrid3.columnEditable(datagrid.grid, failedData.key, failedData.column);
           
           return null;
       }
@@ -1475,6 +1491,24 @@ async function pasteClipboardData() {
 };
 
 /**
+ * 현재 그리드에서 보이는(visible) 행 데이터를 배열로 반환
+ * @returns {Array} 현재 화면에 보이는 행 데이터 배열
+ */
+const getVisibleRows = () => {
+    if (!datagrid.grid || typeof SBGrid3 === 'undefined') return [];
+    return SBGrid3.findRows(datagrid.grid, (data, row) => row.visible) || [];
+};
+
+/**
+ * 그리드의 전체 행 데이터(삭제된 행 제외)를 배열로 반환
+ * @returns {Array} 전체 행 데이터 배열
+ */
+const getAllRows = () => {
+    if (!datagrid.grid || typeof SBGrid3 === 'undefined') return [];
+    return SBGrid3.findRows(datagrid.grid, () => true) || [];
+};
+
+/**
  * 엑셀 파일에서 데이터 임포트
  */
 const importFromExcel = async (file, options = {}) => {
@@ -1541,12 +1575,15 @@ onMounted(async () => {
       query,
       setData,
       datagrid,
+      sbgrid, // 직접 접근용 추가
       save,
       addRow, // 행 추가 메서드 노출
       deleteRow, // 행 삭제 메서드 노출
       importFromExcel, // Excel 업로드 기능 노출
       clearChanges, // Expose clearChanges
       getRowStatus,
+      getVisibleRows, // 현재 보이는 행 반환
+      getAllRows,      // 전체 행 반환
       state, // Expose reactive state directly
       // getters
       get hasChanges() { return hasChanges.value; },
@@ -1618,10 +1655,6 @@ onBeforeUnmount(() => {
     handleResize = null;
   }
 
-  // 그리드 정리 로직 (필요시)
-  if (datagrid.grid && typeof SBGrid3.destroy === 'function') {
-    SBGrid3.destroy(datagrid.grid);
-  }
 });
 
 /**
@@ -1640,11 +1673,14 @@ const handleGridClick = () => {
 defineExpose({
   setData,
   datagrid,
+  sbgrid,
   save,
   addRow,
   deleteRow,
   importFromExcel,
   hasChanges,
+  getVisibleRows,
+  getAllRows,
   state
 });
 </script>
@@ -1652,8 +1688,9 @@ defineExpose({
 <style scoped>
 .ctv-data-grid {
   position: relative;
+  flex-grow: 1;
+  min-height: 0;
   width: 100%;
-  height: 100%;
   overflow: hidden;
   border: 1px solid transparent; /* 기본 테두리 */
   box-sizing: border-box;
