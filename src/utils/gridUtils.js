@@ -677,97 +677,128 @@ export function applyDefaultUnitToColumns(columns, defaultUnit) {
 }
 
 /**
- * 2. Tree 구조의 columns를 평탄화하고 captions(Matrix)을 생성
- * @param {Array} columns - 트리 구조의 컬럼 설정 배열
- * @returns {Object} { columns: 평탄화된 배열, captions: 2차원 배열 }
+ * 2. Tree 구조의 columns를 SBGrid3 다중 헤더 형식으로 변환
+ *
+ *  - 일반 컬럼({ field, caption, ... })은 그대로 반환
+ *  - 그룹 컬럼({ caption, columns: [...] })은 SBGrid3 가이드 형식으로 변환:
+ *      { columns: [리프컬럼들], captions: [행렬], rows: [마지막행] }
+ *
+ * 반환: { columns: SBGrid3에 직접 전달할 혼합 배열, captions: null }
+ *  (captions: null은 CtvDataGrid에서 "이미 변환된 상태"를 의미)
+ *
+ * SBGrid3 가이드 예시:
+ *   columns: [
+ *     { field: 'name', caption: '이름' },          // 일반컬럼 → TextColumn
+ *     {                                             // 그룹컬럼 → GridColumn_GridColumn
+ *       columns: [{ field: 'a' }, { field: 'b' }],
+ *       captions: [['그룹명', '그룹명'], ['A', 'B']],
+ *       rows: [['A', 'B']],
+ *     }
+ *   ]
  */
 export function parseTreeColumns(columns) {
     if (!columns || !Array.isArray(columns) || columns.length === 0) {
         return { columns: [], captions: null };
     }
 
-    // 트리 최대 깊이(Max Depth) 계산
-    const getMaxDepth = (cols) => {
-        let max = 0;
-        for (const col of cols) {
-            if (col.columns && Array.isArray(col.columns) && col.columns.length > 0) {
-                max = Math.max(max, 1 + getMaxDepth(col.columns));
-            } else {
-                max = Math.max(max, 1);
-            }
-        }
-        return max;
-    };
+    // 하위 columns를 가진 그룹이 존재하는지 확인
+    const hasGroup = columns.some(col => Array.isArray(col.columns) && col.columns.length > 0);
 
-    const maxDepth = getMaxDepth(columns);
-
-    // 트리 구조가 1단계(depth=1)이면 기존 방식대로 반환 (captions 매트릭스 불필요)
-    if (maxDepth <= 1) {
-        return { columns: columns, captions: null };
+    // 그룹이 없으면 변환 불필요 — 기존 배열 그대로 반환
+    if (!hasGroup) {
+        return { columns, captions: null };
     }
 
-    const flatColumns = [];
-    const captionsMatrix = Array.from({ length: maxDepth }, () => []);
-    const groupCaptions = new Set(); // SBGrid3 바인딩용 중간 더미 컬럼 추적
-
-    // DFS 탐색하여 리프 노드를 flatColumns에 추가하고 경로 기록
-    const traverse = (cols, currentDepth, pathNames) => {
-        for (const col of cols) {
-            // 현재 노드의 캡션 (배열이면 첫 번째 값 사용, 없으면 필드명)
-            let currentCaption = col.caption;
-            if (Array.isArray(currentCaption)) {
-                currentCaption = currentCaption[0] || col.field || '';
-            } else if (!currentCaption && currentCaption !== '') {
-                currentCaption = col.field || '';
-            }
-
-            const currentPath = [...pathNames, currentCaption];
-
-            if (col.columns && Array.isArray(col.columns) && col.columns.length > 0) {
-                // 자식 노드가 있으면 계속 탐색
-                groupCaptions.add(currentCaption); // 그룹 캡션 기록
-                traverse(col.columns, currentDepth + 1, currentPath);
-            } else {
-                // 리프 노드이면 flatColumns에 추가 (columns 속성은 제거)
-                const flatCol = { ...col };
-                delete flatCol.columns;
-                flatColumns.push(flatCol);
-
-                // 패딩(Padding): 리프 노드에 도달했는데 최대 깊이보다 얕은 경우 마지막 캡션으로 세로 병합되도록 채움
-                const paddedPath = [...currentPath];
-                while (paddedPath.length < maxDepth) {
-                    paddedPath.push(currentCaption);  
-                }
-
-                // 2차원 배열(matrix)에 열 단위로 추가
-                for (let i = 0; i < maxDepth; i++) {
-                    captionsMatrix[i].push(paddedPath[i]);
+    // ──────────────────────────────────────────────────────
+    // 내부 헬퍼: 그룹 컬럼 1개를 SBGrid3 형식으로 변환
+    // ──────────────────────────────────────────────────────
+    const convertGroup = (groupDef) => {
+        // 최대 깊이 계산
+        const getDepth = (cols) => {
+            let max = 0;
+            for (const c of cols) {
+                if (Array.isArray(c.columns) && c.columns.length > 0) {
+                    max = Math.max(max, 1 + getDepth(c.columns));
+                } else {
+                    max = Math.max(max, 1);
                 }
             }
-        }
+            return max;
+        };
+
+        const maxDepth = 1 + getDepth(groupDef.columns); // 루트 그룹 포함
+        const flatLeafs = [];
+        const captionsMatrix = Array.from({ length: maxDepth }, () => []);
+        const groupCaptions = new Set(); // 중간 그룹 캡션 추적 (더미 컬럼 생성용)
+
+        // DFS: 리프 컬럼 수집 + captions 행렬 구성
+        const traverse = (cols, depth, ancestorCaptions) => {
+            for (const col of cols) {
+                const caption = Array.isArray(col.caption) ? (col.caption[0] || '') : (col.caption || col.field || '');
+
+                if (Array.isArray(col.columns) && col.columns.length > 0) {
+                    // 그룹 노드 — 재귀 탐색 + 캡션 기록
+                    groupCaptions.add(caption);
+                    traverse(col.columns, depth + 1, [...ancestorCaptions, caption]);
+                } else {
+                    // 리프 노드
+                    const pathRow = [...ancestorCaptions, caption];
+                    // 패딩: 현재 depth가 maxDepth보다 얕으면 마지막 캡션으로 채움
+                    while (pathRow.length < maxDepth) pathRow.push(caption);
+
+                    for (let i = 0; i < maxDepth; i++) {
+                        captionsMatrix[i].push(pathRow[i]);
+                    }
+
+                    const flatCol = { ...col };
+                    delete flatCol.columns;
+                    flatLeafs.push(flatCol);
+                }
+            }
+        };
+
+        // 루트 그룹의 캡션을 최상단 행에 채워줌 + 루트도 그룹 캡션으로 기록
+        const rootCaption = Array.isArray(groupDef.caption) ? (groupDef.caption[0] || '') : (groupDef.caption || '');
+        groupCaptions.add(rootCaption);
+        traverse(groupDef.columns, 1, [rootCaption]);
+
+        // ★ SBGrid3 필수: captions에 선언된 그룹 캡션은 columns 안에 실제로 존재해야 함
+        // 리프 캡션과 겹치지 않는 그룹 캡션을 더미 컬럼으로 추가
+        const leafCaptions = new Set(flatLeafs.map(c => Array.isArray(c.caption) ? c.caption[0] : c.caption));
+        let dummyIdx = 1;
+        groupCaptions.forEach(gCaption => {
+            if (gCaption && !leafCaptions.has(gCaption)) {
+                flatLeafs.push({
+                    field: `__GROUP_DUMMY_${dummyIdx++}__`,
+                    caption: gCaption,
+                });
+            }
+        });
+
+        return {
+            columns: flatLeafs,
+            captions: captionsMatrix,
+            rows: [captionsMatrix[captionsMatrix.length - 1]],
+        };
     };
 
-    traverse(columns, 0, []);
-
-    // 트리 병합을 위해 부모(중간) 노드로 쓰인 caption들을 더미 컬럼으로 추가 (SBGrid3 다중헤더 필수 요건)
-    // - captions 에 선언된 문자열은 반드시 columns의 caption 프로퍼티에 존재해야 함
-    // - 리프 노드와 겹치는 이름일 경우 추가하지 않음
-    const leafCaptions = new Set(flatColumns.map(c => Array.isArray(c.caption) ? c.caption[0] : c.caption));
-    let mergeIdx = 1;
-    groupCaptions.forEach(gCaption => {
-        if (!leafCaptions.has(gCaption)) {
-            flatColumns.push({
-                field: `MERGE_DUMMY_${mergeIdx++}`,
-                caption: gCaption
-            });
+    // ──────────────────────────────────────────────────────
+    // 상위 columns 배열을 순회하여 혼합 배열 생성
+    // ──────────────────────────────────────────────────────
+    const result = columns.map(col => {
+        if (Array.isArray(col.columns) && col.columns.length > 0) {
+            // 그룹 컬럼 → SBGrid3 다중헤더 형식으로 변환
+            return convertGroup(col);
+        } else {
+            // 일반 컬럼 → 그대로 반환
+            return { ...col };
         }
     });
 
-    return {
-        columns: flatColumns,
-        captions: captionsMatrix
-    };
+    // CtvDataGrid는 captions: null 이면 columns를 createGrid()에 직접 넘김
+    return { columns: result, captions: null };
 }
+
 
 
 export function _getEditable() {

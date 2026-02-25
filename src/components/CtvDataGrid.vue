@@ -389,39 +389,44 @@ const createGrid = async () => {
     const finalConfig = { ...gridConfig };
     
     if (finalConfig.columns && Array.isArray(finalConfig.columns)) {
-       // 트리 형태의 columns 를 flat 시키고 captions 행렬 생성
+       // parseTreeColumns: 일반 컬럼은 그대로, 그룹 컬럼만 SBGrid3 다중헤더 형식으로 변환
        const treeParsed = parseTreeColumns(finalConfig.columns);
-       
-       if (treeParsed.captions) {
-           // 트리 병합 다중 헤더 모드 (SBGrid3 그룹 캡션 랩핑)
-           let processedColumns = treeParsed.columns.map(col => ({ ...col }));
-           processedColumns = applyColTypeToColumns(processedColumns);
-           processedColumns = applyLockTypeToColumns(processedColumns, () => datagrid.grid);
 
-           if (finalConfig.defaultUnit !== undefined) {
-               processedColumns = applyDefaultUnitToColumns(processedColumns, finalConfig.defaultUnit);
-               delete finalConfig.defaultUnit;
-           }
-
-           finalConfig.columns = [
-               {
-                   columns: processedColumns,
-                   captions: treeParsed.captions,
-                   rows: [ treeParsed.captions[treeParsed.captions.length - 1] ] // 마지막 캡션을 rows 배열로 설정하여 명시적 바인딩
+       // 혼합 배열: 일반 컬럼({ field, ... }) or 그룹 객체({ columns, captions, rows })
+       const processedColumns = treeParsed.columns.map(item => {
+           if (Array.isArray(item.columns)) {
+               // 그룹 컬럼: 내부 리프 컬럼들에 colType/lockType 처리 적용
+               let innerCols = applyColTypeToColumns(item.columns);
+               innerCols = applyLockTypeToColumns(innerCols, () => datagrid.grid);
+               if (finalConfig.defaultUnit !== undefined) {
+                   innerCols = applyDefaultUnitToColumns(innerCols, finalConfig.defaultUnit);
                }
-           ];
-       } else {
-           // 1차원 기본 헤더 모드
-           finalConfig.columns = treeParsed.columns.map(col => ({ ...col }));
-           finalConfig.columns = applyColTypeToColumns(finalConfig.columns);
-           finalConfig.columns = applyLockTypeToColumns(finalConfig.columns, () => datagrid.grid);
-
-           if (finalConfig.defaultUnit !== undefined) {
-             finalConfig.columns = applyDefaultUnitToColumns(finalConfig.columns, finalConfig.defaultUnit);
-             delete finalConfig.defaultUnit;
+               return { ...item, columns: innerCols };
+           } else {
+               // 일반 컬럼: 바로 처리
+               return item;
            }
+       });
+
+       // 일반 컬럼들에 colType/lockType 처리 (한번에)
+       let flatResult = applyColTypeToColumns(processedColumns.filter(c => !Array.isArray(c.columns)));
+       flatResult = applyLockTypeToColumns(flatResult, () => datagrid.grid);
+       if (finalConfig.defaultUnit !== undefined) {
+           flatResult = applyDefaultUnitToColumns(flatResult, finalConfig.defaultUnit);
+           delete finalConfig.defaultUnit;
        }
+
+       // 혼합 배열 재조합: 순서 유지 (원본 인덱스 기준)
+       let flatIdx = 0;
+       finalConfig.columns = processedColumns.map(item => {
+           if (Array.isArray(item.columns)) {
+               return item; // 그룹 — 이미 처리됨
+           } else {
+               return flatResult[flatIdx++]; // 일반 컬럼 — 순서대로
+           }
+       });
     }
+
 
     // ===== 컨테이너 설정 =====
     finalConfig.container = gridContainer.value;
@@ -1575,7 +1580,7 @@ onMounted(async () => {
       query,
       setData,
       datagrid,
-      sbgrid, // 직접 접근용 추가
+      get sbgrid() { return datagrid.grid; }, // getter로 변경하여 unwrap된 값 반환
       save,
       addRow, // 행 추가 메서드 노출
       deleteRow, // 행 삭제 메서드 노출

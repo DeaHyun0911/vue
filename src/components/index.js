@@ -14,4 +14,7 @@ export { default as CtvForm } from './CtvForm.vue';
 export { default as CtvFormItem } from './CtvFormItem.vue';
 export { default as CtvTabs } from './CtvTabs.vue';
 export { default as CtvExcelUploadModal } from './CtvExcelUploadModal.vue';
+export { default as CtvImage } from './CtvImage.vue';
 
+// 모달 템플릿 컴포넌트 (modals/ 디렉토리)
+export * from './modals/index.js';

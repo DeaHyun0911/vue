@@ -16,7 +16,7 @@
         <slot name="header"></slot>
     </template>
     
-    <div class="ctv-modal-content">
+    <div class="ctv-modal-body">
         <slot></slot>
     </div>
     
@@ -60,25 +60,33 @@ const handleClose = () => {
    However, we added class="ctv-modal" to the dialog. 
    Element Plus dialog styles are global. We can override specific to ctv-modal class.
 */
-.ctv-modal .el-dialog__header {
-    border-bottom: 1px solid #dcdfe6;
-    margin-right: 0;
-    padding: 15px 20px;
+.el-modal-dialog .ctv-modal {
+    padding: 24px;
 }
 
-.ctv-modal .el-dialog__body {
-    padding: 20px;
+.ctv-modal .el-dialog__header {
+    margin-right: 0;
+    padding: 8px 0 16px;
 }
 
 .ctv-modal .el-dialog__footer {
-    border-top: 1px solid #dcdfe6;
-    padding: 10px 20px;
+    padding: 0;
     text-align: right;
 }
 
-.ctv-modal-footer {
+.ctv-modal .el-table .cell {
+  text-overflow: clip;
+}
+
+.ctv-modal .el-dialog__body {
+    padding: 16px 0;
+}
+
+
+.el-modal-dialog .ctv-modal-footer {
     display: flex;
     justify-content: flex-end;
     gap: 10px;
+    margin-top: 0;
 }
 </style>

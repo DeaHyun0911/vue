@@ -119,49 +119,83 @@ const wrapperStyle = computed(() => {
 defineExpose({ validate });
 </script>
 
-<style scoped>
-:deep(.el-input__wrapper) {
-    box-shadow: 0 0 0 1px #dcdfe6 inset;
-}
-:deep(.el-input__wrapper.is-focus) {
+<style>
+.ctv-wrapper .el-input__wrapper.is-focus {
+    z-index: 2;
     box-shadow: 0 0 0 1px #409eff inset;
 }
 
 /* Input Group 스타일 개선 for Mixed Input */
-:deep(.el-input-group__prepend),
-:deep(.el-input-group__append) {
-    padding: 0;
+.ctv-wrapper .el-input-group__prepend,
+.ctv-wrapper .el-input-group__append {
     background-color: #fff; /* 배경색 일치 */
 }
 
+.el-input-group__prepend .el-button:not(.el-button--default):not(.is-text),
+.el-input-group__append .el-button:not(.el-button--default):not(.is-text) {
+    background-color: var(--el-button-bg-color) !important;
+    border-color: var(--el-button-border-color) !important;
+    color: var(--el-button-text-color) !important;
+}
+
+.el-input-group__prepend .el-button:not(.el-button--default):not(.is-text) {
+    border-radius: 4px 0px 0px 4px;
+}
+
+.el-input-group__append .el-button:not(.el-button--default):not(.is-text) {
+    border-radius: 0px 4px 4px 0px;
+}
+
+/* Hover 시에도 스타일 유지 */
+.el-input-group__prepend .el-button:not(.el-button--default):not(.is-text):hover,
+.el-input-group__append .el-button:not(.el-button--default):not(.is-text):hover {
+    background-color: var(--el-button-hover-bg-color) !important;
+    border-color: var(--el-button-hover-border-color) !important;
+    color: var(--el-button-hover-text-color) !important;
+}
+
+/* 슬롯에 CtvInput(.ctv-wrapper)이 있을 때만 패딩 0 적용 */
+.ctv-wrapper .el-input-group__prepend:has(.ctv-wrapper),
+.ctv-wrapper .el-input-group__append:has(.ctv-wrapper) {
+    padding: 0;
+}
+
 /* 슬롯 내부 CtvInput wrapper 초기화 */
-:deep(.el-input-group__prepend .ctv-wrapper),
-:deep(.el-input-group__append .ctv-wrapper) {
+.ctv-wrapper .el-input-group__prepend .ctv-wrapper,
+.ctv-wrapper .el-input-group__append .ctv-wrapper {
     margin: 0;
     width: 100%; /* 비율을 따르도록 100% 로 변경 */
     min-width: 0;
 }
 
-/* 슬롯 내부 input - 테두리 및 그림자 제거하여 자연스럽게 연결 */
-:deep(.el-input-group__prepend .el-input__wrapper),
-:deep(.el-input-group__append .el-input__wrapper) {
-    background-color: transparent !important;
+.ctv-wrapper .el-input-group__prepend .el-input__wrapper {
     border-radius: 4px 0px 0px 4px;
-    margin-right: -1px;
+}
+
+.ctv-wrapper .el-input-group__prepend {
+    margin-right: -2px;
+}
+
+.ctv-wrapper .el-input-group__append {
+    margin-left: -2px;
+}
+
+.ctv-wrapper .el-input-group__append .el-input__wrapper {
+    border-radius: 0px 4px 4px 0px;
 }
 
 /* 구분선 추가 및 비율 적용 */
-:deep(.el-input-group__prepend) {
+.ctv-wrapper .el-input-group__prepend {
     border-right: 1px solid #dcdfe6;
     width: var(--ctv-prepend-width, auto);
 }
-:deep(.el-input-group__append) {
+.ctv-wrapper .el-input-group__append {
     border-left: 1px solid #dcdfe6;
     width: var(--ctv-append-width, auto);
 }
 
 /* 필수값 표시 */
-.ctv-wrapper.is-required :deep(.el-input__wrapper) {
+.ctv-wrapper.is-required .el-input__wrapper {
     background-color: #fefce8 !important; /* light yellow (tailwind yellow-50) */
 }
 </style>

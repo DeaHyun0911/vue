@@ -107,10 +107,8 @@ defineExpose({ validate });
   font-size: 12px;
   margin-top: 2px;
 }
-:deep(.el-textarea__inner) {
-    box-shadow: 0 0 0 1px #dcdfe6 inset;
-}
-:deep(.el-textarea__inner:focus) {
+
+.el-textarea__inner:focus {
     box-shadow: 0 0 0 1px #409eff inset;
 }
 </style>

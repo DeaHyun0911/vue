@@ -1,5 +1,5 @@
 <template>
-  <div class="ctv-form-wrapper">
+  <div class="ctv-form-wrapper" :style="{ maxWidth: formatSize(maxWidth) }">
     <!-- Optional Title -->
     <h3 v-if="title" class="ctv-form-title">{{ title }}</h3>
     
@@ -9,7 +9,7 @@
       :model="model"
       class="ctv-form"
       :class="[`columns-${columns}`]"
-      :label-width="effectiveLabelWidth"
+      :label-width="labelWidth"
       :label-position="labelPosition"
       :rules="rules"
       :style="gridStyle"
@@ -21,12 +21,31 @@
           :prop="fieldDef.field"
           :span="fieldDef.span"
           v-if="fieldDef.visible !== false"
+          :style="getFieldStyle(fieldDef)"
         >
-          <component 
+          <!-- ctv-empty: 빈 공간 (레이아웃 정렬용) -->
+          <div v-if="fieldDef.component === 'ctv-empty'" class="ctv-empty-space" :style="fieldDef.style || {}"></div>
+          <component
+            v-else
             :is="fieldDef.component" 
             v-bind="fieldDef"
             :field="fieldDef.field"
-          />
+            v-on="fieldDef.events || {}"
+          >
+            <!-- 폼 내부 슬롯 지원 (Mixed Input 등) -->
+            <template v-for="(slotData, slotName) in fieldDef.slots" :key="slotName" v-slot:[slotName]>
+                <!-- 1. 컴포넌트 렌더링 -->
+                <component 
+                    v-if="slotData.component" 
+                    :is="slotData.component"
+                    v-bind="slotData"
+                >
+                    {{ slotData.content }}
+                </component>
+                <!-- 2. 단순 컨텐츠 -->
+                <span v-else-if="slotData.content" v-html="slotData.content"></span>
+            </template>
+          </component>
         </ctv-form-item>
       </template>
 
@@ -37,7 +56,7 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue';
+import { ref, computed, isRef, onMounted, onUnmounted, provide, toRef, reactive } from 'vue';
 
 const props = defineProps({
   model: {
@@ -73,20 +92,51 @@ const props = defineProps({
   fields: {
     type: [Array, Object],
     default: () => []
+  },
+  maxWidth: {
+    type: [String, Number],
+    default: 'none'
+  },
+  gap: {
+    type: String,
+    default: '8px 20px'
   }
 });
 
+// 너비 단위 처리 함수 (숫자일 경우 px 추가)
+const formatSize = (val) => {
+  if (!val || val === 'none') return 'none';
+  return isNaN(val) ? val : `${val}px`;
+};
+
 const resolvedFields = computed(() => {
-  if (Array.isArray(props.fields)) {
-    return props.fields;
+  // ComputedRef로 전달된 경우 (reactive 객체 내부에서 computed로 감싼 fields) 언래핑
+  const rawFields = isRef(props.fields) ? props.fields.value : props.fields;
+
+  if (Array.isArray(rawFields)) {
+    return rawFields.map(f => {
+      // 룰셋에서 해당 필드(f.field)에 required: true 가 있는지 확인
+      let isReq = f.required === true;
+      if (!isReq && f.field && props.rules && props.rules[f.field]) {
+        const fieldRules = Array.isArray(props.rules[f.field]) ? props.rules[f.field] : [props.rules[f.field]];
+        isReq = fieldRules.some(r => r.required === true);
+      }
+      return { ...f, required: isReq };
+    });
   }
   
   // Object 형식인 경우 Array로 변환 (Key를 field로 사용)
-  if (props.fields && typeof props.fields === 'object') {
-    return Object.entries(props.fields).map(([key, value]) => {
+  if (rawFields && typeof rawFields === 'object') {
+    return Object.entries(rawFields).map(([key, value]) => {
+      let isReq = value.required === true;
+      if (!isReq && props.rules && props.rules[key]) {
+        const fieldRules = Array.isArray(props.rules[key]) ? props.rules[key] : [props.rules[key]];
+        isReq = fieldRules.some(r => r.required === true);
+      }
       return {
         field: key,
-        ...value
+        ...value,
+        required: isReq
       };
     });
   }
@@ -94,7 +144,26 @@ const resolvedFields = computed(() => {
   return [];
 });
 
-import { provide, toRef, reactive } from 'vue';
+const windowWidth = ref(typeof window !== 'undefined' ? window.innerWidth : 1200);
+const handleResize = () => { windowWidth.value = window.innerWidth; };
+
+onMounted(() => { window.addEventListener('resize', handleResize); });
+onUnmounted(() => { window.removeEventListener('resize', handleResize); });
+
+/**
+ * 화면 너비에 따른 실제 컬럼 수 계산
+ */
+const currentColumns = computed(() => {
+  const maxCols = Number(props.columns) || 1;
+  const width = windowWidth.value;
+  
+  if (width <= 768) return 1;
+  if (width <= 1600) return Math.min(2, maxCols);
+  if (width <= 1920) return Math.min(3, maxCols);
+  if (width <= 2560) return Math.min(4, maxCols);
+  return maxCols;
+});
+
 provide('formModel', toRef(props, 'model'));
 
 // 폼 포커스 상태 관리 (그리드 동기화 제어용)
@@ -116,19 +185,28 @@ const formRef = ref(null);
 
 // Grid Style for CSS Grid Layout
 const gridStyle = computed(() => {
-  const cols = Number(props.columns) || 1;
   return {
     display: 'grid',
-    gridTemplateColumns: `repeat(${cols}, 1fr)`,
-    gap: '8px 20px', // row-gap handled by form-item margin
+    gridTemplateColumns: `repeat(${currentColumns.value}, 1fr)`,
+    gap: props.gap, 
   };
 });
 
 // Handle label-width for top position
-const effectiveLabelWidth = computed(() => {
+const labelWidth = computed(() => {
   if (props.labelPosition === 'top') return 'auto';
   return props.labelWidth;
 });
+
+/**
+ * 각 필드의 스타일 계산 (그리드 레이아웃 지원)
+ */
+const getFieldStyle = (field) => {
+  const span = Math.min(field.span || 1, currentColumns.value);
+  return {
+    gridColumn: `span ${span}`
+  };
+};
 
 // Expose Element Plus Form methods transparently
 const validate = (...args) => formRef.value?.validate(...args);
@@ -153,12 +231,11 @@ defineExpose({
 }
 
 .ctv-form-title {
-  font-size: 16px;
+  font-size: 18px;
   font-weight: 600;
-  margin-bottom: 15px;
+  margin-bottom: 24px;
+  margin-top: 0;
   color: #333;
-  border-left: 4px solid #409eff;
-  padding-left: 10px;
 }
 
 .ctv-form {
@@ -170,5 +247,10 @@ defineExpose({
   .ctv-form {
     grid-template-columns: 1fr !important;
   }
+}
+
+.ctv-empty-space {
+  width: 100%;
+  height: 100%;
 }
 </style>
