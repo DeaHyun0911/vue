@@ -17,7 +17,7 @@
         @focus="onFocus"
         @blur="onBlur"
         @change="$emit('change', $event)"
-        @input="$emit('input', $event)"
+        @input="onInput"
         style="width: 100%; box-sizing: border-box;"
         v-bind="$attrs"
       >
@@ -42,6 +42,7 @@
 
 <script setup>
 import { computed, ref, inject } from 'vue';
+import { formItemContextKey } from 'element-plus';
 
 const props = defineProps({
   modelValue: [String, Number],
@@ -58,7 +59,8 @@ const props = defineProps({
   validate: [Object, String, Function], // validation rule
   field: String, // New prop for implicit binding
   prependRatio: { type: [String, Number], default: null },
-  appendRatio: { type: [String, Number], default: null }
+  appendRatio: { type: [String, Number], default: null },
+  format: { type: String, default: null }, // 'bizno', 'jumin', 'corp', 'phone' or custom like '###-##-#####'
 });
 
 import { useFormField } from '../composables/useFormField';
@@ -70,14 +72,73 @@ const { innerValue, onFormFieldBlur } = useFormField(props, emit);
 // 폼 포커스 상태 관리 (inject from CtvForm)
 const formFocusState = inject('formFocusState', null);
 
+const elFormItem = inject(formItemContextKey, null);
 const errorMessage = ref('');
-const hasError = computed(() => !!errorMessage.value);
+const hasError = computed(() => !elFormItem && !!errorMessage.value);
 
 const onFocus = (e) => {
   if (formFocusState) {
     formFocusState.setFocus(true);
   }
   emit('focus', e);
+};
+
+const applyFormat = (val) => {
+  if (!val || typeof val !== 'string') return val;
+  const str = val.replace(/[^0-9]/g, ''); // 숫자만 남기기
+  
+  // 커스텀 마스크 포맷 (예: '###-##-#####')
+  if (props.format && props.format.includes('#')) {
+    let result = '';
+    let strIndex = 0;
+    for (let i = 0; i < props.format.length; i++) {
+      if (strIndex >= str.length) break;
+      const char = props.format[i];
+      if (char === '#') {
+        result += str[strIndex++];
+      } else {
+        result += char;
+      }
+    }
+    return result;
+  }
+
+  if (props.format === 'bizno') {
+    // ###-##-#####
+    if (str.length < 4) return str;
+    if (str.length < 6) return `${str.substring(0, 3)}-${str.substring(3)}`;
+    return `${str.substring(0, 3)}-${str.substring(3, 5)}-${str.substring(5, 10)}`;
+  } else if (props.format === 'jumin' || props.format === 'corp') {
+     // ######-#######
+    if (str.length < 7) return str;
+    return `${str.substring(0, 6)}-${str.substring(6, 13)}`;
+  } else if (props.format === 'phone') {
+    // 전화번호 포맷 (02-xxxx-xxxx, 010-xxxx-xxxx 등)
+    if (str.length < 3) return str;
+    if (str.startsWith('02')) {
+      if (str.length < 4) return str;
+      if (str.length < 6) return `${str.substring(0, 2)}-${str.substring(2)}`;
+      if (str.length < 10) return `${str.substring(0, 2)}-${str.substring(2, 5)}-${str.substring(5, 9)}`;
+      return `${str.substring(0, 2)}-${str.substring(2, 6)}-${str.substring(6, 10)}`;
+    } else {
+      if (str.length < 4) return str;
+      if (str.length < 7) return `${str.substring(0, 3)}-${str.substring(3)}`;
+      if (str.length < 11) return `${str.substring(0, 3)}-${str.substring(3, 6)}-${str.substring(6, 10)}`;
+      return `${str.substring(0, 3)}-${str.substring(3, 7)}-${str.substring(7, 11)}`;
+    }
+  }
+  return val;
+};
+
+const onInput = (val) => {
+  if (props.format) {
+    const formatted = applyFormat(val);
+    if (val !== formatted) {
+      innerValue.value = formatted;
+      val = formatted;
+    }
+  }
+  emit('input', val);
 };
 
 const onBlur = (e) => {
@@ -120,7 +181,7 @@ defineExpose({ validate });
 </script>
 
 <style>
-.ctv-wrapper .el-input__wrapper.is-focus {
+.ctv-wrapper .el-input__wrapper:hover {
     z-index: 2;
     box-shadow: 0 0 0 1px #409eff inset;
 }

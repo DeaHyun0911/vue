@@ -11,7 +11,7 @@
       :class="[`columns-${columns}`]"
       :label-width="labelWidth"
       :label-position="labelPosition"
-      :rules="rules"
+      :rules="processedRules"
       :style="gridStyle"
     >
       <!-- 선언적 필드 렌더링 (CtvQueryFilter 스타일) -->
@@ -56,7 +56,7 @@
 </template>
 
 <script setup>
-import { ref, computed, isRef, onMounted, onUnmounted, provide, toRef, reactive } from 'vue';
+import { ref, computed, isRef, onMounted, onUnmounted, provide, toRef, reactive, watch, nextTick } from 'vue';
 
 const props = defineProps({
   model: {
@@ -144,11 +144,74 @@ const resolvedFields = computed(() => {
   return [];
 });
 
+const processedRules = computed(() => {
+  if (!props.rules) return {};
+  const newRules = {};
+  for (const key in props.rules) {
+    const fieldRules = props.rules[key];
+    if (Array.isArray(fieldRules)) {
+      newRules[key] = fieldRules.map(r => {
+        if (r.required && !r.message) {
+          return { ...r, message: '필수 입력 항목입니다.' };
+        }
+        return r;
+      });
+    } else if (fieldRules && typeof fieldRules === 'object') {
+      if (fieldRules.required && !fieldRules.message) {
+        newRules[key] = { ...fieldRules, message: '필수 입력 항목입니다.' };
+      } else {
+        newRules[key] = fieldRules;
+      }
+    }
+  }
+  return newRules;
+});
+
+watch(resolvedFields, (fields) => {
+  if (props.model) {
+    const initializeFields = (def) => {
+      Object.keys(def).forEach(k => {
+        // field 속성, 또는 addrField 등 Field 패턴이 들어간 속성 자동 초기화
+        if (k === 'field' || k.endsWith('Field')) {
+          const fieldName = def[k];
+          if (typeof fieldName === 'string' && props.model[fieldName] === undefined) {
+            props.model[fieldName] = '';
+          }
+        }
+      });
+      // 슬롯 내 삽입된 컴포넌트의 field 들도 자동 초기화
+      if (def.slots) {
+        Object.values(def.slots).forEach(slotItem => {
+          if (slotItem && typeof slotItem === 'object') {
+            initializeFields(slotItem);
+          }
+        });
+      }
+    };
+    
+    fields.forEach(f => initializeFields(f));
+  }
+}, { immediate: true, deep: true });
+
 const windowWidth = ref(typeof window !== 'undefined' ? window.innerWidth : 1200);
 const handleResize = () => { windowWidth.value = window.innerWidth; };
 
-onMounted(() => { window.addEventListener('resize', handleResize); });
-onUnmounted(() => { window.removeEventListener('resize', handleResize); });
+const handleGridFocusDataChanged = (e) => {
+  if (e.detail?.focusData === props.model && formRef.value) {
+    nextTick(() => {
+      formRef.value.clearValidate();
+    });
+  }
+};
+
+onMounted(() => { 
+  window.addEventListener('resize', handleResize); 
+  window.addEventListener('ctv-grid-focus-data-changed', handleGridFocusDataChanged);
+});
+onUnmounted(() => { 
+  window.removeEventListener('resize', handleResize); 
+  window.removeEventListener('ctv-grid-focus-data-changed', handleGridFocusDataChanged);
+});
 
 /**
  * 화면 너비에 따른 실제 컬럼 수 계산

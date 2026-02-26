@@ -7,8 +7,9 @@ export function useFormField(props, emit) {
         get() {
             // If 'field' prop is provided and we are inside a CtvForm (providing formModel),
             // we use the implicit binding.
-            if (props.field && formModel && formModel.value && formModel.value[props.field] !== undefined) {
-                return formModel.value[props.field];
+            if (props.field && formModel && formModel.value) {
+                const val = formModel.value[props.field];
+                return val !== undefined ? val : '';
             }
             // Fallback to v-model
             return props.modelValue;

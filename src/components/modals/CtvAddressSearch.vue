@@ -186,6 +186,12 @@ const handleClose = () => {
         resolvePromise.value(null);
         resolvePromise.value = null;
     }
+    
+    // 모달 닫힐 때 검색 기록 초기화
+    keyword.value = '';
+    results.value = [];
+    searched.value = false;
+    currentPage.value = 1;
 };
 
 // ── 주소 검색 ──────────────────────────────────────────────
@@ -247,10 +253,33 @@ const selectRow = (row) => {
   // 1. CtvForm model에 자동 채우기 (컨텍스트가 있는 경우)
   if (formModel?.value) {
     const model = formModel.value;
-    if (props.field && props.field in model)                      model[props.field] = row.zipNo;
-    if (props.addrField && props.addrField in model)              model[props.addrField] = row.roadAddr;
-    if (props.engAddrField && props.engAddrField in model)        model[props.engAddrField] = row.engAddr;
-    if (props.jibunAddrField && props.jibunAddrField in model)   model[props.jibunAddrField] = row.jibunAddr;
+    const fieldsToSync = [];
+    
+    if (props.field && props.field in model) {
+      model[props.field] = row.zipNo;
+      fieldsToSync.push(props.field);
+    }
+    if (props.addrField && props.addrField in model) {
+      model[props.addrField] = row.roadAddr;
+      fieldsToSync.push(props.addrField);
+    }
+    if (props.engAddrField && props.engAddrField in model) {
+      model[props.engAddrField] = row.engAddr;
+      fieldsToSync.push(props.engAddrField);
+    }
+    if (props.jibunAddrField && props.jibunAddrField in model) {
+      model[props.jibunAddrField] = row.jibunAddr;
+      fieldsToSync.push(props.jibunAddrField);
+    }
+
+    // 변경된 필드들을 그리드에 동기화하기 위해 블러 이벤트 발생
+    if (typeof window !== 'undefined') {
+      fieldsToSync.forEach(field => {
+        window.dispatchEvent(new CustomEvent('ctv-form-field-blur', {
+          detail: { formModel: model, field }
+        }));
+      });
+    }
   }
 
   // 2. Promise resolve 처리 (독립 호출용)

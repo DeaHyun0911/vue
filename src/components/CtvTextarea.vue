@@ -32,6 +32,7 @@
 
 <script setup>
 import { computed, ref, inject } from 'vue';
+import { formItemContextKey } from 'element-plus';
 
 const props = defineProps({
   modelValue: [String, Number],
@@ -61,8 +62,9 @@ const { innerValue, onFormFieldBlur } = useFormField(props, emit);
 // 폼 포커스 상태 관리 (inject from CtvForm)
 const formFocusState = inject('formFocusState', null);
 
+const elFormItem = inject(formItemContextKey, null);
 const errorMessage = ref('');
-const hasError = computed(() => !!errorMessage.value);
+const hasError = computed(() => !elFormItem && !!errorMessage.value);
 
 const onFocus = (e) => {
   if (formFocusState) {

@@ -739,7 +739,7 @@ defineExpose({
 });
 </script>
 
-<style scoped>
+<style>
 
 /* 반응형 처리 */
 @media (max-width: 768px) {
@@ -760,4 +760,14 @@ defineExpose({
   width: 100%;
   height: 100%;
 }
+
+.ctv-query-filter .ctv-form {
+  align-items: start;
+}
+
+.ctv-query-filter .ctv-form .el-form-item__error {
+  position: unset;
+}
+
+
 </style>

@@ -11,6 +11,8 @@
 <script setup>
 import { ref, reactive, computed, onMounted, onBeforeUnmount, watch, markRaw, nextTick, unref, isRef, h } from 'vue';
 import { ElMessageBox, ElLoading, ElTable, ElTableColumn } from 'element-plus';
+import { pendingUploads } from '../utils/pendingUploads.js';
+import { useFileUpload } from '../composables/useFileUpload.js';
 import { 
   getDefaultGridConfig, 
   getEditableGridConfig,
@@ -838,6 +840,9 @@ const updateFocusData = (grid, rowItem) => {
         const rowData = SBGrid3.getFocusedValue(grid);
         if (!rowData) return;
 
+        // 양방향 동기화를 위한 현재 데이터 스냅샷 저장
+        state.focusData = { ...rowData };
+
         Object.keys(rowData).forEach(key => {
             const newVal = rowData[key] !== undefined && rowData[key] !== null ? rowData[key] : '';
             if (focusData[key] !== newVal) {
@@ -846,7 +851,15 @@ const updateFocusData = (grid, rowItem) => {
         });
 
     } finally {
-        nextTick(() => { isSyncing = false; });
+        nextTick(() => { 
+            isSyncing = false;
+            // 폼 유효성 검증 마크 지우기 위한 이벤트
+            if (typeof window !== 'undefined') {
+                window.dispatchEvent(new CustomEvent('ctv-grid-focus-data-changed', {
+                    detail: { focusData }
+                }));
+            }
+        });
     }
 };
 
@@ -859,13 +872,22 @@ const clearFocusData = () => {
 
     isSyncing = true;
     try {
+        state.focusData = null; // 스냅샷 초기화
+        
         Object.keys(focusData).forEach(key => {
             if (focusData[key] !== '') {
                 focusData[key] = '';
             }
         });
     } finally {
-        nextTick(() => { isSyncing = false; });
+        nextTick(() => { 
+            isSyncing = false;
+            if (typeof window !== 'undefined') {
+                window.dispatchEvent(new CustomEvent('ctv-grid-focus-data-changed', {
+                    detail: { focusData }
+                }));
+            }
+        });
     }
 };
 
@@ -1062,6 +1084,67 @@ async function save(reload = true) {
       if (!(await processDataArray(updatedData, "U"))) return null;
       if (!(await processDataArray(deletedData, "D"))) return null;
 
+      // 3-1. deferUpload 대기 중인 파일 처리 (Binary 업로드)
+      const uploadedFileTasks = []; // DB 저장 실패 시 롤백(삭제)하기 위한 기록
+      const rollbackUploadedFiles = async (tasks) => {
+          if (tasks.length === 0) return;
+          const { deleteFile } = useFileUpload();
+          for (const task of tasks) {
+              try {
+                  const delCfg = {
+                      ...task.uploadConfig,
+                      deleteAshxUrl: task.uploadConfig.ashxUrl || 'FileUpLoad.ashx',
+                      deleteAction:  task.uploadConfig.action || '',
+                      folder2: task.uploadConfig.folder2,
+                      folder3: task.uploadConfig.folder3,
+                  };
+                  await deleteFile(task.filename, delCfg, task.focusData);
+              } catch(e) {
+                  console.warn("[CtvDataGrid] 롤백 - 파일 삭제 실패", task.filename, e);
+              }
+          }
+      };
+
+      if (!pendingUploads.isEmpty()) {
+        const pending = pendingUploads.flushAll();
+        const { upload } = useFileUpload();
+
+        for (const [field, { file, uploadConfig, focusData }] of pending.entries()) {
+          try {
+            // FileUploadApi.ashx 에 파일 업로드(Binary) → 실제 저장된 파일명 받음
+            const uploadCfg = {
+              ...uploadConfig,
+              ashxUrl: uploadConfig.ashxUrl || '../../cwwsCom/NewFileUpload/FileUploadApi.ashx',
+            };
+            const result = await upload(file, uploadCfg, focusData);
+            const serverFileName = result.NM_FILE;
+            
+            uploadedFileTasks.push({ filename: serverFileName, uploadConfig: uploadCfg, focusData });
+
+            // ① 헤더(aSaveData[0])에 필드 없으면 추가 → SetMakeQuery가 SQL에 포함
+            if (!(field in aSaveData[0])) {
+              aSaveData[0][field] = field + String.fromCharCode(7) + 'S:0:500';
+            }
+
+            // ② 데이터 행에 실제 파일명 주입 (삭제 행 제외)
+            for (let i = 1; i < aSaveData.length; i++) {
+              if (aSaveData[i].FLAG === 'D') continue;
+              aSaveData[i][field] = serverFileName;
+            }
+          } catch (err) {
+            console.error(`[CtvDataGrid] 파일 업로드 실패 (field: ${field})`, err);
+            // 여태 성공한 업로드 파일 모두 삭제
+            await rollbackUploadedFiles(uploadedFileTasks);
+            await ElMessageBox.alert(
+              `파일 업로드 중 오류가 발생했습니다.\n${err.message || ''}`,
+              '업로드 오류',
+              { type: 'error' }
+            );
+            return null;
+          }
+        }
+      }
+
       // 4. API 호출
       const loading = ElLoading.service({
           lock: true,
@@ -1086,6 +1169,7 @@ async function save(reload = true) {
           }
 
           if (result.ErrorCode && result.ErrorCode !== "") {
+               await rollbackUploadedFiles(uploadedFileTasks); // 안전장치: DB 실패 시 물리 파일 정리
                if (top.mwPop09Open) top.mwPop09Open(result, result.ErrorCode);
                if (saveConfig.onError) saveConfig.onError(result);
                return result;
@@ -1117,6 +1201,9 @@ async function save(reload = true) {
       return result;
 
   } catch (err) {
+      if (uploadedFileTasks && uploadedFileTasks.length > 0) {
+          await rollbackUploadedFiles(uploadedFileTasks).catch(() => {}); // catch 내의 예외는 무시
+      }
       console.error("[CtvDataGrid] 저장 중 오류:", err);
       if (saveConfig.onError) saveConfig.onError(err);
       else if (top.SetMessage) top.SetMessage("저장 중 오류가 발생했습니다.");
@@ -1406,12 +1493,12 @@ function showRowDetailModal(grid, column, rowItem) {
     });
 
     // VNode 생성 (ElTable 사용)
-    // height: 500px -> max-height 설정하여 내용만큼만 표시되도록 변경
-    const vnode = h('div', { style: 'max-height: 70vh; display: flex; flex-direction: column;' }, [
+    const vnode = h('div', { style: 'display: flex; flex-direction: column; width: 100%;' }, [
         h(ElTable, { 
             data: tableData, 
             border: true, 
-            style: 'width: 100%; flex: 1;',
+            maxHeight: '450px',
+            style: 'width: 100%;',
             fit: true,
             showHeader: true,
             size: 'small',
