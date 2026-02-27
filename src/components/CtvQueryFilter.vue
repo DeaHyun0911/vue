@@ -469,12 +469,65 @@ const resolvedButtons = computed(() => {
 const fieldValues = reactive({});
 
 /**
+ * ctv-date의 defaultValue 키워드를 실제 날짜 문자열로 변환
+ * @param {'today'|'thisMonth'|'thisYear'|{offset:number,unit:'month'|'year'}|string} keyword
+ * @param {string} type - ctv-date의 type 속성 (date, month, year, daterange 등)
+ */
+const resolveDateKeyword = (keyword, type) => {
+    if (keyword === undefined || keyword === null || keyword === '') return keyword;
+
+    // 포맷터: type에 따라 YYYYMMDD / YYYYMM / YYYY 반환
+    const fmt = (date) => {
+        const y = date.getFullYear();
+        const m = String(date.getMonth() + 1).padStart(2, '0');
+        const d = String(date.getDate()).padStart(2, '0');
+        if (type?.includes('month')) return `${y}${m}`;
+        if (type?.includes('year'))  return `${y}`;
+        return `${y}${m}${d}`;
+    };
+
+    const now = new Date();
+
+    // 문자열 키워드
+    if (typeof keyword === 'string') {
+        if (keyword === 'today')     return fmt(now);
+        if (keyword === 'thisMonth') return fmt(new Date(now.getFullYear(), now.getMonth(), 1));
+        if (keyword === 'thisYear')  return fmt(new Date(now.getFullYear(), 0, 1));
+        return keyword; // 이미 실제 날짜 문자열인 경우 그대로 반환
+    }
+
+    // 객체 키워드: { offset: -1, unit: 'month' }
+    if (keyword && typeof keyword === 'object' && 'offset' in keyword) {
+        const { offset, unit } = keyword;
+        const target = new Date(now);
+        if (unit === 'month') target.setMonth(target.getMonth() + offset);
+        if (unit === 'year')  target.setFullYear(target.getFullYear() + offset);
+        // month 단위이고 type이 date 계열이면 해당 월의 1일로
+        if (unit === 'month' && !type?.includes('month') && !type?.includes('year')) {
+            target.setDate(1);
+        }
+        return fmt(target);
+    }
+
+    return keyword;
+};
+
+/**
  * 필드의 기본값 결정
  */
 const getDefaultValue = (field) => {
   // props에 defaultValue가 있으면 사용
   if (field.props?.defaultValue !== undefined) {
-    return field.props.defaultValue;
+    const dv = field.props.defaultValue;
+    // ctv-date 계열 컴포넌트인 경우 키워드 변환 적용
+    if (field.component === 'ctv-date') {
+        const type = field.props?.type || field.type;
+        if (Array.isArray(dv)) {
+            return dv.map(v => resolveDateKeyword(v, type));
+        }
+        return resolveDateKeyword(dv, type);
+    }
+    return dv;
   }
   // 컴포넌트 타입에 따른 기본값
   if (field.component === 'ctv-check' || field.component === 'ctv-switch') {
